@@ -156,10 +156,13 @@ export const DownloadProvider: React.FC<DownloadProviderProps> = ({
       // Get auth token for authenticated request
       const token = localStorage.getItem("auth_token");
 
-      // Fetch audio file from backend with auth token
-      const response = await fetch(streamAPI.getStreamUrl(track.videoId), {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
+      // Use the direct API path for downloads to get the raw stream
+      const response = await fetch(
+        `${import.meta.env.VITE_BACKEND_URL}/api/stream/${track.videoId}`,
+        {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        },
+      );
 
       if (!response.ok) {
         const errorText = await response.text();

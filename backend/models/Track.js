@@ -144,7 +144,7 @@ class Track {
 
   /**
    * Increment play count and add to listening history
-   * ✅ FIXED: Now requires userId parameter with better error handling
+   * ✅ FIXED: Prevents duplicate entries within 60 seconds
    * @param {string} videoId - YouTube video ID
    * @param {number} userId - User ID (required)
    */
@@ -172,13 +172,27 @@ class Track {
 
         const trackId = tracks[0].id;
 
+        // ✅ Check if this user played this track in the last 60 seconds
+        const [recentPlays] = await connection.execute(
+          `SELECT id FROM listening_history 
+           WHERE user_id = ? AND track_id = ? 
+           AND played_at > DATE_SUB(NOW(), INTERVAL 60 SECOND)
+           LIMIT 1`,
+          [userId, trackId]
+        );
+
+        if (recentPlays.length > 0) {
+          console.log(`⏭️ Skipping duplicate play record: ${videoId} (played within last 60s)`);
+          return; // Don't record duplicate
+        }
+
         // Increment play count
         await connection.execute(
           'UPDATE tracks SET play_count = play_count + 1, last_played_at = NOW() WHERE id = ?',
           [trackId]
         );
 
-        // ✅ FIXED: Add to listening history with user_id
+        // Add to listening history
         await connection.execute(
           'INSERT INTO listening_history (user_id, track_id) VALUES (?, ?)',
           [userId, trackId]

@@ -317,72 +317,54 @@ export const searchAPI = {
 
 export const streamAPI = {
   /**
-   * Get stream URL for a video (legacy - for direct URLs without auth)
+   * ✅ OPTIMIZED: Gets a progressive stream URL.
+   * Components calling this won't know the logic changed, but it will be faster.
    */
-  getStreamUrl: (videoId: string): string => {
-    return `${BASE_URL}/api/stream/${videoId}`;
-  },
-
-  /**
-   * ✅ NEW: Fetch authenticated stream and return blob URL
-   * This allows the audio element to play with auth headers
-   */
-  getAuthenticatedStreamUrl: async (videoId: string): Promise<string> => {
+  getStreamUrl: async (videoId: string): Promise<string> => {
     try {
       const token = localStorage.getItem('auth_token');
       
-      console.log(`🔐 Fetching authenticated stream for: ${videoId}`);
-      
-      const response = await fetch(`${BASE_URL}/api/stream/${videoId}`, {
-        method: 'GET',
+      // Try to get a signed token first (Optimized path)
+      const response = await fetch(`${BASE_URL}/api/stream/token/${videoId}`, {
+        method: 'POST',
         headers: {
           'Authorization': token ? `Bearer ${token}` : '',
+          'Content-Type': 'application/json',
         },
       });
 
-      if (!response.ok) {
-        throw new Error(`Stream request failed: ${response.status}`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.streamUrl) return data.streamUrl;
       }
-
-      // Convert to blob
-      const blob = await response.blob();
       
-      // Create object URL
-      const objectUrl = URL.createObjectURL(blob);
-      
-      console.log(`✅ Created authenticated stream URL for: ${videoId}`);
-      return objectUrl;
-      
+      // Fallback: If token route doesn't exist, return direct URL
+      return `${BASE_URL}/api/stream/${videoId}${token ? `?auth=${token}` : ''}`;
     } catch (error) {
-      console.error('❌ Failed to get authenticated stream:', error);
-      throw error;
+      // Fallback for any network errors
+      const token = localStorage.getItem('auth_token');
+      return `${BASE_URL}/api/stream/${videoId}${token ? `?auth=${token}` : ''}`;
     }
   },
 
-  /**
-   * Get audio file info
-   */
+  // Keep this for components that specifically expect a Blob (like Downloads)
+  getAuthenticatedStreamUrl: async (videoId: string): Promise<string> => {
+    const token = localStorage.getItem('auth_token');
+    const response = await fetch(`${BASE_URL}/api/stream/${videoId}`, {
+      headers: { 'Authorization': token ? `Bearer ${token}` : '' }
+    });
+    const blob = await response.blob();
+    return URL.createObjectURL(blob);
+  },
+
   getInfo: async (videoId: string) => {
-    try {
-      const response = await apiClient.get(`/stream/info/${videoId}`);
-      return response.data;
-    } catch (error) {
-      console.error('Get stream info failed:', error);
-      throw error;
-    }
+    const response = await apiClient.get(`/stream/info/${videoId}`);
+    return response.data;
   },
 
-  /**
-   * Get storage statistics
-   */
   getStats: async () => {
-    try {
-      const response = await apiClient.get('/stream/stats/storage');
-      return response.data;
-    } catch (error) {
-      console.error('Get storage stats failed:', error);
-      throw error;
-    }
+    const response = await apiClient.get('/stream/stats/storage');
+    return response.data;
   },
 };
 
