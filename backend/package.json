@@ -1,0 +1,36 @@
+{
+  "name": "vibestream-backend",
+  "version": "1.0.0",
+  "description": "Backend server for VibeStream music streaming app",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js",
+    "db:init": "node scripts/initDatabase.js",
+    "db:reset": "node scripts/resetDatabase.js"
+  },
+  "keywords": [
+    "music",
+    "streaming",
+    "youtube",
+    "openai",
+    "mysql"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^1.6.2",
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "fluent-ffmpeg": "^2.1.2",
+    "mysql2": "^3.6.5",
+    "node-cache": "^5.1.2",
+    "openai": "^4.20.1",
+    "youtube-dl-exec": "^2.4.8"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  }
+}
