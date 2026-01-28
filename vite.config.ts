@@ -12,17 +12,13 @@ export default defineConfig(({ mode }) => {
       host: '0.0.0.0', // Allow access from local network
       proxy: {
         '/api': {
-          target: 'https://localhost:3001', // Your backend server
+          target: 'https://frank-loui-lapore-hp-probook-640-g1.tail11c2e9.ts.net', // Your backend server
           changeOrigin: true,
           secure: false,
         },
       },
     },
     plugins: [react()],
-    define: {
-      'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-      'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-    },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
