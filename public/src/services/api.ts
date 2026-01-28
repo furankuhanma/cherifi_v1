@@ -195,8 +195,9 @@ export const authAPI = {
   },
 };
 
+
 // ============================================
-// TRACK / LIKES API
+// TRACK / LIKES and HISTORY API
 // ============================================
 
 export const trackAPI = {
@@ -233,7 +234,35 @@ export const trackAPI = {
       throw error;
     }
   }
+
 };
+
+export const historyAPI = {
+  getHistory: async (limit: number = 50): Promise<Track[]> => {
+    try {
+      const response = await apiClient.get('/history', {
+        params: { limit }
+      });
+      return response.data.history || [];
+      
+    }catch(error) {
+      console.error("Get history Failed: ", error)
+      throw error;
+    }
+  },
+
+  addToHistory: async (trackData: Track): Promise<void> =>{
+    try{
+      await apiClient.post('/history', {
+        videoId: trackData.videoId,
+        trackData
+      });
+    }catch(error) {
+      console.error("Add to history failed: ", error)
+      throw error;
+    }
+  }
+}
 
 // ============================================
 // SEARCH API
@@ -648,4 +677,5 @@ export default {
   playlist: playlistAPI,
   server: serverAPI,
   track: trackAPI,
+  history: historyAPI
 };

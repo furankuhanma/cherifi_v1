@@ -9,34 +9,85 @@ const trackRoutes = require('./routes/track');
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 3002;
 
 // Import routes
 const searchRoutes = require('./audio_cache/routes/search');
 const streamRoutes = require('./routes/stream');
 const aiRoutes = require('./routes/ai');
 const playlistRoutes = require('./routes/playlist');
-const authRoutes = require('./routes/auth'); // ✅ NEW: Auth routes
+const authRoutes = require('./routes/auth');
+const historyRouter = require('./routes/history')
 
-// Middleware
+// ============================================
+// MIDDLEWARE CONFIGURATION
+// ============================================
+
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  
+  // List of allowed origins
+  const allowedOrigins = [
+    'https://cherifi-v1.vercel.app',
+    'https://cherifi-api.clever-systems.com',  // ← Make sure this is here
+    'http://localhost:3000',
+    'http://localhost:4173',
+    'http://localhost:4174',
+  ];
+  
+  // Set origin if it's in allowed list
+  if (allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  }
+  
+  // Critical PNA headers
+  res.setHeader('Access-Control-Allow-Private-Network', 'true');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  
+  // Handle preflight
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(204);
+  }
+  console.log("Origin:", req.headers.origin);
+  
+  next();
+});
+// CORS Configuration
 app.use(cors({
   origin: [
     'https://cherifi-v1.vercel.app',
+    'https://cherifi-api.clever-systems.com',
     'http://localhost:3000',
-    'http://localhost:4173'
+
+    'http://localhost:4173',
+    'http://localhost:4174',
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
+
+// Handle all OPTIONS requests explicitly
+app.options('*', cors());
+
+// JSON body parser
 app.use(express.json());
 
-// Request logging middleware
+// Detailed request logging
 app.use((req, res, next) => {
   const timestamp = new Date().toISOString();
+  console.log('\n========================================');
   console.log(`[${timestamp}] ${req.method} ${req.path}`);
+  console.log('Origin:', req.headers.origin);
+  console.log('========================================\n');
   next();
 });
+
+// ============================================
+// ROUTES
+// ============================================
 
 app.use('/api/tracks', trackRoutes);
 
@@ -99,7 +150,8 @@ app.get('/api/stats', async (req, res) => {
 });
 
 // API Routes
-app.use('/api/auth', authRoutes);           // ✅ NEW: Authentication endpoints
+app.use('/api/auth', authRoutes);
+app.use('/api/history', historyRouter);
 app.use('/api/search', searchRoutes);
 app.use('/api/stream', streamRoutes);
 app.use('/api/ai', aiRoutes);
@@ -114,10 +166,10 @@ app.use((req, res) => {
       'GET /api/health',
       'GET /api/config/test',
       'GET /api/stats',
-      'POST /api/auth/register',      // ✅ NEW
-      'POST /api/auth/login',          // ✅ NEW
-      'POST /api/auth/logout',         // ✅ NEW
-      'GET /api/auth/me',              // ✅ NEW
+      'POST /api/auth/register',
+      'POST /api/auth/login',
+      'POST /api/auth/logout',
+      'GET /api/auth/me',
       'GET /api/search?q=query',
       'GET /api/search/trending',
       'GET /api/stream/:videoId',
@@ -140,7 +192,10 @@ app.use((err, req, res, next) => {
   });
 });
 
-// ✅ NEW: Initialize database with users table
+// ============================================
+// DATABASE INITIALIZATION
+// ============================================
+
 async function initializeDatabase() {
   try {
     // Ensure database exists
@@ -153,16 +208,16 @@ async function initializeDatabase() {
     // Initialize existing tables
     await database.initializeTables();
 
-    // ✅ NEW: Update tracks table for Hybrid Storage
+    // Update tracks table for Hybrid Storage
     console.log('🎵 Updating tracks table for hybrid storage...');
     try {
       await database.query(`
-    ALTER TABLE tracks 
-    ADD COLUMN local_path VARCHAR(255) DEFAULT NULL,
-    ADD COLUMN is_downloaded BOOLEAN DEFAULT 0,
-    ADD COLUMN file_size_mb FLOAT DEFAULT 0,
-    ADD COLUMN mime_type VARCHAR(50) DEFAULT 'audio/mpeg'
-  `);
+        ALTER TABLE tracks 
+        ADD COLUMN local_path VARCHAR(255) DEFAULT NULL,
+        ADD COLUMN is_downloaded BOOLEAN DEFAULT 0,
+        ADD COLUMN file_size_mb FLOAT DEFAULT 0,
+        ADD COLUMN mime_type VARCHAR(50) DEFAULT 'audio/mpeg'
+      `);
       console.log('✅ Tracks table updated');
     } catch (error) {
       if (!error.message.includes('Duplicate column name')) {
@@ -170,19 +225,20 @@ async function initializeDatabase() {
       }
     }
 
-    // ✅ NEW: Create liked_tracks junction table
+    // Create liked_tracks junction table
     console.log('❤️ Creating liked_tracks table...');
     await database.query(`
-  CREATE TABLE IF NOT EXISTS liked_tracks (
-    user_id INT NOT NULL,
-    track_id INT NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (user_id, track_id),
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (track_id) REFERENCES tracks(id) ON DELETE CASCADE
-  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-`);
-    // ✅ NEW: Create users table
+      CREATE TABLE IF NOT EXISTS liked_tracks (
+        user_id INT NOT NULL,
+        track_id INT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (user_id, track_id),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (track_id) REFERENCES tracks(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
+    // Create users table
     console.log('👤 Creating users table...');
     await database.query(`
       CREATE TABLE IF NOT EXISTS users (
@@ -198,7 +254,7 @@ async function initializeDatabase() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
 
-    // ✅ NEW: Update playlists table to link with users (if column doesn't exist)
+    // Update playlists table to link with users
     console.log('🔗 Updating playlists table...');
     try {
       await database.query(`
@@ -209,7 +265,6 @@ async function initializeDatabase() {
       `);
       console.log('✅ Playlists table updated with user_id');
     } catch (error) {
-      // Column might already exist, ignore error
       if (!error.message.includes('Duplicate column name')) {
         console.warn('⚠️ Could not add user_id to playlists:', error.message);
       }
@@ -221,7 +276,10 @@ async function initializeDatabase() {
   }
 }
 
-// Initialize database and start server
+// ============================================
+// SERVER STARTUP
+// ============================================
+
 async function startServer() {
   try {
     await initializeDatabase();
@@ -246,8 +304,8 @@ async function startServer() {
       console.log('    - GET  /api/search/trending');
       console.log('  🎵 Music:');
       console.log('    - GET  /api/stream/:videoId');
-      console.log('    - GET  /api/tracks/liked'); // Added this
-      console.log('    - POST /api/tracks/like');  // Added this
+      console.log('    - GET  /api/tracks/liked');
+      console.log('    - POST /api/tracks/like');
       console.log('  🤖 AI:');
       console.log('    - POST /api/ai/chat');
       console.log('    - POST /api/ai/recommend');
@@ -263,7 +321,10 @@ async function startServer() {
   }
 }
 
-// Handle graceful shutdown
+// ============================================
+// GRACEFUL SHUTDOWN
+// ============================================
+
 process.on('SIGINT', async () => {
   console.log('\n🛑 Shutting down gracefully...');
   await database.close();
