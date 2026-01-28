@@ -14,11 +14,70 @@ const streamToken = require('../utils/streamToken');
 // Initialize audio service
 const audioService = new AudioService();
 
+
+
+
+
+
 /**
  * POST /api/stream/token/:videoId
  * ✅ NEW: Generate a signed streaming token for progressive playback
  * This eliminates the need for blob conversion on the frontend
  */
+router.post('/prefetch/:videoId', optionalAuth, async (req, res) => {
+  const { videoId } = req.params;
+  const userId = req.user?.id;
+
+  try {
+    // Validate videoId format
+    if (!videoId || !/^[a-zA-Z0-9_-]{11}$/.test(videoId)) {
+      return res.status(400).json({
+        error: 'Invalid video ID',
+        message: 'Video ID must be 11 characters'
+      });
+    }
+
+    console.log(`🔮 Prefetch request: ${videoId}${userId ? ` (User: ${userId})` : ' (Anonymous)'}`);
+
+    // Trigger download/cache (same as regular stream, but don't stream the file)
+    const audioData = await audioService.downloadAudio(videoId);
+    const isCached = audioData.cached;
+
+    // Save metadata if new download
+    if (!isCached && audioData.metadata) {
+      console.log(`💾 Prefetch: Saving metadata for ${videoId}`);
+      
+      Track.save({
+        videoId: videoId,
+        title: audioData.metadata.title || 'Unknown Title',
+        artist: audioData.metadata.artist || audioData.metadata.uploader || 'Unknown Artist',
+        album: audioData.metadata.album || 'YouTube Music',
+        coverUrl: audioData.metadata.thumbnail || (audioData.metadata.thumbnails && audioData.metadata.thumbnails[0] ? audioData.metadata.thumbnails[0].url : ''),
+        duration: audioData.metadata.duration || 0,
+        channelTitle: audioData.metadata.uploader || audioData.metadata.channel || '',
+        viewCount: audioData.metadata.view_count || 0
+      }).catch(err => {
+        console.error('⚠️ Prefetch metadata save failed:', err.message);
+      });
+    }
+
+    // Return success without streaming
+    res.json({
+      success: true,
+      videoId,
+      cached: isCached,
+      message: isCached ? 'Already cached' : 'Download complete and cached',
+      filePath: audioData.filePath
+    });
+
+  } catch (error) {
+    console.error(`❌ Prefetch error for ${videoId}:`, error);
+    res.status(500).json({ 
+      error: 'Prefetch failed', 
+      message: error.message 
+    });
+  }
+});
 router.post('/token/:videoId', optionalAuth, async (req, res) => {
   const { videoId } = req.params;
   const userId = req.user?.id;

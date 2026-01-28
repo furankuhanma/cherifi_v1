@@ -6,7 +6,7 @@ const Track = require('../models/Track');
 class AudioService {
   constructor() {
     this.audioDir = process.env.AUDIO_STORAGE_DIR || '/home/frank-loui-lapore/vibestream/audio';
-    this.maxCacheSizeMB = parseInt(process.env.MAX_CACHE_SIZE_MB) || 5000;
+    this.maxCacheSizeMB = parseInt(process.env.MAX_CACHE_SIZE_MB) || 10000;
     
     this.ensureDirectories();
   }
@@ -103,7 +103,7 @@ class AudioService {
         extractAudio: true,
         audioFormat: 'mp3',
         audioQuality: '9',
-        output: path.join(this.audioDir, `${videoId}.%(ext)s`),
+        output: outputPath,
         noCheckCertificates: true,
         noWarnings: true,
         preferFreeFormats: true,
@@ -112,8 +112,20 @@ class AudioService {
 
       console.log(`✅ Download completed, verifying file...`);
 
-      // 6. Verify file was created
-      const fileExists = await this.fileExists(outputPath);
+        let fileExists = false;
+      let attempts = 0;
+      const maxAttempts = 10; // Increased from 5 to 10 for slower systems
+      const retryDelay = 500; // 500ms between checks
+
+      while (!fileExists && attempts < maxAttempts) {
+        await new Promise(resolve => setTimeout(resolve, retryDelay));
+        fileExists = await this.fileExists(outputPath);
+        attempts++;
+        
+        if (!fileExists && attempts < maxAttempts) {
+          console.log(`⏳ Waiting for file conversion... (attempt ${attempts}/${maxAttempts})`);
+        }
+      }
       if (!fileExists) {
         // List directory to see what was actually created
         const files = await fs.readdir(this.audioDir);
@@ -122,7 +134,23 @@ class AudioService {
         console.error(`❌ Expected file not found: ${outputPath}`);
         console.error(`📁 Files found starting with ${videoId}:`, matchingFiles);
         
-        throw new Error(`Download completed but file not found. Found: ${matchingFiles.join(', ')}`);
+                if (matchingFiles.length > 0) {
+          const wrongFile = matchingFiles[0];
+          const wrongPath = path.join(this.audioDir, wrongFile);
+          
+          console.log(`🔄 Found ${wrongFile}, attempting to rename to ${outputFilename}`);
+          
+          try {
+            await fs.rename(wrongPath, outputPath);
+            console.log(`✅ Successfully renamed to ${outputFilename}`);
+            fileExists = true;
+          } catch (renameErr) {
+            console.error(`❌ Rename failed:`, renameErr.message);
+            throw new Error(`Download completed but file has wrong extension: ${wrongFile}`);
+          }
+        } else {
+          throw new Error(`Download completed but file not found. Found: ${matchingFiles.join(', ')}`);
+        }
       }
 
       // 7. Update Database local status

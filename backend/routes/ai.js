@@ -271,4 +271,141 @@ router.post('/smart-search', async (req, res) => {
   }
 });
 
+// ============================================
+// 🎵 ADD THIS TO THE BOTTOM OF routes/ai.js
+// (Keep all existing routes above unchanged)
+// ============================================
+
+/**
+ * 🆕 POST /api/ai/smart-recommendations
+ * Spotify-style smart recommendations with artist diversity
+ * Body: { 
+ *   currentTrack: { title, artist, videoId }, 
+ *   recentTracks: [...],
+ *   count: 15 
+ * }
+ */
+router.post('/smart-recommendations', async (req, res) => {
+  try {
+    const { currentTrack, recentTracks = [], count = 15 } = req.body;
+
+    // Validate input
+    if (!currentTrack || !currentTrack.artist || !currentTrack.title) {
+      return res.status(400).json({
+        error: 'Invalid request',
+        message: 'currentTrack with artist and title is required'
+      });
+    }
+
+    console.log(`🎯 Spotify-style recommendations for: ${currentTrack.title}`);
+
+    // Get AI analysis and search queries
+    const { analysis, searchQueries } = await openaiService.getSpotifyRecommendations(
+      currentTrack,
+      recentTracks,
+      count
+    );
+
+    console.log(`📊 Analysis: ${analysis.genre} (${analysis.mood})`);
+    console.log(`🔍 Generated ${searchQueries.length} search queries`);
+
+    // Search YouTube for each query (parallel requests)
+    const resultsPerQuery = 3;
+    const searchPromises = searchQueries.map(query =>
+      youtubeService.searchMusic(query, resultsPerQuery).catch(err => {
+        console.error(`Search failed for "${query}":`, err.message);
+        return [];
+      })
+    );
+
+    const results = await Promise.all(searchPromises);
+    const allTracks = results.flat();
+
+    // Apply Spotify diversity rules
+    const recommendations = applySpotifyRules(
+      allTracks,
+      currentTrack,
+      recentTracks,
+      count
+    );
+
+    console.log(`✅ Returning ${recommendations.length} recommendations`);
+
+    res.json({
+      analysis,
+      recommendations,
+      count: recommendations.length,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('❌ Smart recommendations error:', error);
+    res.status(500).json({
+      error: 'Smart recommendations failed',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * Helper: Apply Spotify diversity rules
+ * - Max 2 songs by same artist in a row
+ * - Max 3 songs per artist total
+ * - Remove duplicates and recently played
+ */
+function applySpotifyRules(tracks, currentTrack, recentTracks, targetCount) {
+  // Remove duplicates
+  const seen = new Set();
+  const recentIds = new Set([
+    currentTrack.videoId,
+    ...recentTracks.map(t => t.videoId)
+  ]);
+
+  const uniqueTracks = tracks.filter(track => {
+    const key = `${track.artist.toLowerCase()}-${track.title.toLowerCase()}`;
+    
+    if (seen.has(key) || recentIds.has(track.videoId)) {
+      return false;
+    }
+    
+    seen.add(key);
+    return true;
+  });
+
+  // Apply artist diversity rules
+  const finalPlaylist = [];
+  const artistCount = {};
+
+  for (const track of uniqueTracks) {
+    if (finalPlaylist.length >= targetCount) break;
+
+    const artist = track.artist.toLowerCase();
+
+    // Rule 1: Max 2 songs by same artist in a row
+    const lastTwo = finalPlaylist.slice(-2);
+    const sameArtistInRow = lastTwo.filter(t => 
+      t.artist.toLowerCase() === artist
+    ).length;
+
+    if (sameArtistInRow >= 2) {
+      continue; // Skip this track
+    }
+
+    // Rule 2: Max 3 songs per artist in entire playlist
+    artistCount[artist] = (artistCount[artist] || 0) + 1;
+    if (artistCount[artist] > 3) {
+      continue;
+    }
+
+    finalPlaylist.push(track);
+  }
+
+  return finalPlaylist;
+}
+
+// ============================================
+// Don't forget module.exports at the very bottom:
+// module.exports = router;
+// ============================================
+
 module.exports = router;

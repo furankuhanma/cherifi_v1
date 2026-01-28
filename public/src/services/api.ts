@@ -405,7 +405,11 @@ export const aiAPI = {
   /**
    * Get music recommendations based on mood
    */
-  recommend: async (mood: string, context: string = '', searchYouTube: boolean = true) => {
+  recommend: async (
+    mood: string,
+    context: string = '',
+    searchYouTube: boolean = true
+  ) => {
     try {
       const response = await apiClient.post('/ai/recommend', {
         mood,
@@ -447,6 +451,43 @@ export const aiAPI = {
       throw error;
     }
   },
+  /**
+   * 🆕 Get Spotify-style smart recommendations
+   * @param currentTrack - Currently playing track
+   * @param recentTracks - Last 3-5 played tracks
+   * @param count - Number of recommendations (default: 15)
+   */
+  getSmartRecommendations: async (
+    currentTrack: Track,
+    recentTracks: Track[] = [],
+    count: number = 15
+  ): Promise<{ analysis: any; recommendations: Track[] }> => {
+    try {
+      const response = await apiClient.post('/ai/smart-recommendations', {
+        currentTrack: {
+          title: currentTrack.title,
+          artist: currentTrack.artist,
+          videoId: currentTrack.videoId,
+          duration: currentTrack.duration,
+        },
+        recentTracks: recentTracks.slice(-5).map((t) => ({
+          title: t.title,
+          artist: t.artist,
+          videoId: t.videoId,
+        })),
+        count,
+      });
+
+      return {
+        analysis: response.data.analysis,
+        recommendations: response.data.recommendations || [],
+      };
+    } catch (error) {
+      console.error('Smart recommendations failed:', error);
+      throw error;
+    }
+  },
+
 
   /**
    * Test AI connection
