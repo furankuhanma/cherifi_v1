@@ -19,7 +19,16 @@ const playlistRoutes = require('./routes/playlist');
 const authRoutes = require('./routes/auth'); // ✅ NEW: Auth routes
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: [
+    'https://cherifi-v1.vercel.app',
+    'http://localhost:3000',
+    'http://localhost:4173'
+  ],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 app.use(express.json());
 
 // Request logging middleware
