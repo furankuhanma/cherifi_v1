@@ -1,28 +1,43 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { Play, Heart, MoreHorizontal, Clock, ArrowLeft, Trash2, Edit2, RefreshCw, Loader } from 'lucide-react';
-import { usePlayer } from '../context/PlayerContext';
-import { useLibrary } from '../context/LibraryContext';
-import { useLikes } from '../context/LikeContext';
-import { useDownloads } from '../context/DownloadContext';
-import { playlistAPI } from '../services/api';
-import { Playlist, Track } from '../types/types';
-import TrackOptionsMenu from '../components/TrackOptionsMenu';
-import AddToPlaylistModal from '../components/AddToPlayListModal';
+import React, { useState, useEffect } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import {
+  Play,
+  Heart,
+  MoreHorizontal,
+  Clock,
+  ArrowLeft,
+  Trash2,
+  Edit2,
+  RefreshCw,
+  Loader,
+} from "lucide-react";
+import { usePlayer } from "../context/PlayerContext";
+import { useLibrary } from "../context/LibraryContext";
+import { useLikes } from "../context/LikeContext";
+import { useDownloads } from "../context/DownloadContext";
+import { playlistAPI } from "../services/api";
+import { Playlist, Track } from "../types/types";
+import TrackOptionsMenu from "../components/TrackOptionsMenu";
+import AddToPlaylistModal from "../components/AddToPlayListModal";
 
 const PlaylistDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { playTrack, currentTrack, isPlaying, setPlaylist: setPlayerPlaylist } = usePlayer();
+  const {
+    playTrack,
+    currentTrack,
+    isPlaying,
+    setPlaylist: setPlayerPlaylist,
+  } = usePlayer();
   const { playlists, refreshPlaylists } = useLibrary();
   const { isLiked, toggleLike } = useLikes();
   const { isDownloaded, downloadTrack } = useDownloads();
-  
+
   const [playlist, setPlaylist] = useState<Playlist | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  
+
   // Modal state
   const [isPlaylistModalOpen, setIsPlaylistModalOpen] = useState(false);
   const [selectedTrack, setSelectedTrack] = useState<Track | null>(null);
@@ -51,8 +66,9 @@ const PlaylistDetail: React.FC = () => {
       setPlaylist(data);
       console.log(`✅ Loaded playlist with ${data.tracks?.length || 0} tracks`);
     } catch (err: any) {
-      const errorMsg = err.response?.data?.message || err.message || 'Failed to load playlist';
-      console.error('❌ Failed to load playlist:', errorMsg);
+      const errorMsg =
+        err.response?.data?.message || err.message || "Failed to load playlist";
+      console.error("❌ Failed to load playlist:", errorMsg);
       setError(errorMsg);
       setPlaylist(null);
     } finally {
@@ -75,11 +91,11 @@ const PlaylistDetail: React.FC = () => {
    */
   const handlePlayPlaylist = () => {
     if (!playlist || !playlist.tracks || playlist.tracks.length === 0) {
-      console.warn('⚠️ No tracks to play');
+      console.warn("⚠️ No tracks to play");
       return;
     }
 
-    console.log('▶️ Playing playlist:', playlist.name);
+    console.log("▶️ Playing playlist:", playlist.name);
     setPlayerPlaylist(playlist.tracks);
     playTrack(playlist.tracks[0]);
   };
@@ -119,7 +135,7 @@ const PlaylistDetail: React.FC = () => {
     try {
       await downloadTrack(track);
     } catch (error) {
-      console.error('Download failed:', error);
+      console.error("Download failed:", error);
     }
   };
 
@@ -129,31 +145,31 @@ const PlaylistDetail: React.FC = () => {
   const handleDownloadMusic = async (track: Track) => {
     try {
       console.log(`🎵 Downloading music file: ${track.title}`);
-      
+
       if (!track.videoId) {
-        console.error('❌ No videoId available for download');
+        console.error("❌ No videoId available for download");
         return;
       }
-      
+
       const response = await fetch(`/api/stream/${track.videoId}`);
       if (!response.ok) {
-        throw new Error('Failed to fetch stream URL');
+        throw new Error("Failed to fetch stream URL");
       }
-      
+
       const streamData = await response.json();
-      
-      const link = document.createElement('a');
+
+      const link = document.createElement("a");
       link.href = streamData.url;
       link.download = `${track.artist} - ${track.title}.mp3`;
-      link.target = '_blank';
-      
+      link.target = "_blank";
+
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      
-      console.log('✅ Music download started');
+
+      console.log("✅ Music download started");
     } catch (error) {
-      console.error('❌ Music download failed:', error);
+      console.error("❌ Music download failed:", error);
     }
   };
 
@@ -163,19 +179,22 @@ const PlaylistDetail: React.FC = () => {
   const formatDuration = (seconds: number): string => {
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
 
   /**
    * Calculate total playlist duration
    */
   const getTotalDuration = (): string => {
-    if (!playlist || !playlist.tracks) return '0 min';
-    
-    const totalSeconds = playlist.tracks.reduce((acc, track) => acc + track.duration, 0);
+    if (!playlist || !playlist.tracks) return "0 min";
+
+    const totalSeconds = playlist.tracks.reduce(
+      (acc, track) => acc + track.duration,
+      0,
+    );
     const hours = Math.floor(totalSeconds / 3600);
     const minutes = Math.floor((totalSeconds % 3600) / 60);
-    
+
     if (hours > 0) {
       return `${hours} hr ${minutes} min`;
     }
@@ -197,16 +216,18 @@ const PlaylistDetail: React.FC = () => {
     return (
       <div className="flex flex-col items-center justify-center h-[60vh] animate-in fade-in">
         <div className="bg-red-900/20 border border-red-500 rounded-lg p-6 max-w-md text-center">
-          <p className="text-red-400 mb-4">❌ {error || 'Playlist not found'}</p>
+          <p className="text-red-400 mb-4">
+            ❌ {error || "Playlist not found"}
+          </p>
           <div className="flex gap-3 justify-center">
-            <button 
-              onClick={() => navigate('/library')}
+            <button
+              onClick={() => navigate("/library")}
               className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-full text-sm font-medium transition"
             >
               Go to Library
             </button>
             {id && (
-              <button 
+              <button
                 onClick={() => loadPlaylist(id)}
                 className="px-4 py-2 bg-blue-500 text-black hover:bg-[#1ed760] rounded-full text-sm font-medium transition"
               >
@@ -222,26 +243,36 @@ const PlaylistDetail: React.FC = () => {
   return (
     <div className="animate-in fade-in duration-500 -mx-4 md:mx-0">
       {/* Hero Header */}
-      <div className="flex flex-col md:flex-row items-end gap-6 p-4 md:p-0 md:mb-8 bg-gradient-to-b from-zinc-800 to-transparent pt-12 md:pt-0">
-        <button 
-          onClick={() => navigate(-1)} 
-          className="md:hidden absolute top-4 left-4 bg-black bg-opacity-50 p-2 rounded-full hover:bg-opacity-70 transition"
+      <div className="flex flex-col md:flex-row items-start gap-6 p-4 md:p-0 md:mb-8 bg-gradient-to-b from-zinc-800 to-transparent pt-12 md:pt-0">
+        <button
+          onClick={() => navigate(-1)}
+          className="md:hidden absolute top-4 left-4 z-10 bg-black bg-opacity-50 p-2 rounded-full hover:bg-opacity-70 transition"
         >
           <ArrowLeft size={24} />
         </button>
-        
-        <img 
-          src={playlist.coverUrl} 
-          alt={playlist.name} 
-          className="w-48 h-48 md:w-64 md:h-64 shadow-2xl rounded-md mx-auto md:mx-0"
+
+        {/* Image: Kept mx-auto to stay centered on mobile */}
+        <img
+          src={playlist.coverUrl}
+          alt={playlist.name}
+          className="w-48 h-48 md:w-64 md:h-64 shadow-2xl rounded-md mx-auto md:mx-0 shrink-0"
         />
-        
-        <div className="flex flex-col gap-2 text-center md:text-left">
-          <span className="uppercase text-xs font-bold hidden md:inline">Playlist</span>
-          <h1 className="text-3xl md:text-7xl font-bold tracking-tighter">{playlist.name}</h1>
-          <p className="text-zinc-400 text-sm md:text-base mt-2">{playlist.description}</p>
-          <div className="flex items-center gap-2 text-sm mt-4 justify-center md:justify-start">
-            <span className="font-bold">VibeStream</span>
+
+        {/* Text Wrapper: items-start ensures the column children don't center themselves */}
+        <div className="flex flex-col items-start gap-2 text-left w-full">
+          <span className="uppercase text-xs font-bold hidden md:inline">
+            Playlist
+          </span>
+          <h1 className="text-3xl md:text-7xl font-bold tracking-tighter">
+            {playlist.name}
+          </h1>
+          <p className="text-zinc-400 text-sm md:text-base mt-2">
+            {playlist.description}
+          </p>
+
+          {/* Stats Row: justify-start ensures this doesn't center either */}
+          <div className="flex items-center gap-2 text-sm mt-4 justify-start">
+            <span className="font-bold">CheriFi</span>
             <span className="text-zinc-400">
               • {playlist.tracks?.length || 0} songs, {getTotalDuration()}
             </span>
@@ -251,32 +282,22 @@ const PlaylistDetail: React.FC = () => {
 
       {/* Action Bar */}
       <div className="flex items-center gap-6 p-4 md:px-0 mb-6">
-        <button 
+        <button
           onClick={handlePlayPlaylist}
           disabled={!playlist.tracks || playlist.tracks.length === 0}
           className="w-14 h-14 bg-blue-500 rounded-full flex items-center justify-center text-black hover:scale-105 transition shadow-lg disabled:opacity-50 disabled:hover:scale-100 disabled:cursor-not-allowed"
         >
           <Play size={28} className="ml-1 fill-current" />
         </button>
-        
-        <Heart 
-          size={32} 
-          className="text-zinc-400 hover:text-white transition cursor-pointer" 
-        />
-        
+
         <button
           onClick={handleRefresh}
           disabled={isRefreshing}
           className="text-zinc-400 hover:text-white transition disabled:opacity-50"
           title="Refresh playlist"
         >
-          <RefreshCw size={28} className={isRefreshing ? 'animate-spin' : ''} />
+          <RefreshCw size={28} className={isRefreshing ? "animate-spin" : ""} />
         </button>
-        
-        <MoreHorizontal 
-          size={32} 
-          className="text-zinc-400 hover:text-white transition cursor-pointer ml-auto" 
-        />
       </div>
 
       {/* Track List */}
@@ -297,50 +318,78 @@ const PlaylistDetail: React.FC = () => {
             playlist.tracks.map((track, index) => {
               const isCurrent = currentTrack?.id === track.id;
               return (
-                <div 
+                <div
                   key={track.id}
-                  className={`grid grid-cols-[auto_1fr_40px] md:grid-cols-[16px_1fr_1fr_80px] items-center gap-4 px-4 py-3 rounded-md hover:bg-zinc-800 transition group relative z-0 hover:z-50 ${
-                    isCurrent ? 'bg-zinc-800/50' : ''
+                  className={`grid grid-cols-[auto_1fr_auto] md:grid-cols-[16px_1fr_1fr_auto] w-full items-center gap-2 md:gap-4 px-4 py-3 rounded-md hover:bg-zinc-800 transition group relative z-0 hover:z-50 ${
+                    isCurrent ? "bg-zinc-800/50" : ""
                   }`}
                 >
-                  <span className={`hidden md:inline text-sm ${isCurrent ? 'text-blue-500 ' : 'text-zinc-400 group-hover:text-white'}`}>
+                  <span
+                    className={`hidden md:inline text-sm ${isCurrent ? "text-blue-500 " : "text-zinc-400 group-hover:text-white"}`}
+                  >
                     {isCurrent && isPlaying ? (
                       <div className="flex items-end gap-[2px] h-3">
-                        <div className="w-1 h-2 bg-blue-500 animate-[bounce_0.6s_infinite]" style={{ animationDelay: '0.1s' }} />
-                        <div className="w-1 h-3 bg-blue-500 animate-[bounce_0.6s_infinite]" style={{ animationDelay: '0.3s' }} />
-                        <div className="w-1 h-2 bg-blue-500 animate-[bounce_0.6s_infinite]" style={{ animationDelay: '0.2s' }} />
+                        <div
+                          className="w-1 h-2 bg-blue-500 animate-[bounce_0.6s_infinite]"
+                          style={{ animationDelay: "0.1s" }}
+                        />
+                        <div
+                          className="w-1 h-3 bg-blue-500 animate-[bounce_0.6s_infinite]"
+                          style={{ animationDelay: "0.3s" }}
+                        />
+                        <div
+                          className="w-1 h-2 bg-blue-500 animate-[bounce_0.6s_infinite]"
+                          style={{ animationDelay: "0.2s" }}
+                        />
                       </div>
                     ) : (
                       index + 1
                     )}
                   </span>
-                  
+
                   {/* Track Info - Clickable */}
-                  <div 
+                  <div
                     className="flex items-center gap-4 overflow-hidden cursor-pointer"
                     onClick={() => handlePlayTrack(index)}
                   >
                     <div className="relative w-10 h-10 md:hidden rounded overflow-hidden flex-shrink-0">
-                      <img src={track.coverUrl} alt="" className="object-cover w-full h-full" />
+                      <img
+                        src={track.coverUrl}
+                        alt=""
+                        className="object-cover w-full h-full"
+                      />
                       {isCurrent && isPlaying && (
                         <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
                           <div className="flex items-end gap-[1px] h-3">
-                            <div className="w-0.5 h-1 bg-white animate-[bounce_0.6s_infinite]" style={{ animationDelay: '0.1s' }} />
-                            <div className="w-0.5 h-2 bg-white animate-[bounce_0.6s_infinite]" style={{ animationDelay: '0.3s' }} />
-                            <div className="w-0.5 h-1 bg-white animate-[bounce_0.6s_infinite]" style={{ animationDelay: '0.2s' }} />
+                            <div
+                              className="w-0.5 h-1 bg-white animate-[bounce_0.6s_infinite]"
+                              style={{ animationDelay: "0.1s" }}
+                            />
+                            <div
+                              className="w-0.5 h-2 bg-white animate-[bounce_0.6s_infinite]"
+                              style={{ animationDelay: "0.3s" }}
+                            />
+                            <div
+                              className="w-0.5 h-1 bg-white animate-[bounce_0.6s_infinite]"
+                              style={{ animationDelay: "0.2s" }}
+                            />
                           </div>
                         </div>
                       )}
                     </div>
                     <div className="flex flex-col overflow-hidden">
-                      <span className={`text-sm font-medium truncate ${isCurrent ? 'text-blue-500 ' : 'text-white'}`}>
+                      <span
+                        className={`text-sm font-medium truncate ${isCurrent ? "text-blue-500 " : "text-white"}`}
+                      >
                         {track.title}
                       </span>
-                      <span className="text-xs text-zinc-400 truncate">{track.artist}</span>
+                      <span className="text-xs text-zinc-400 truncate">
+                        {track.artist}
+                      </span>
                     </div>
                   </div>
 
-                  <span 
+                  <span
                     className="hidden md:inline text-sm text-zinc-400 truncate cursor-pointer"
                     onClick={() => handlePlayTrack(index)}
                   >
@@ -348,18 +397,20 @@ const PlaylistDetail: React.FC = () => {
                   </span>
 
                   {/* Duration and Menu */}
-                  <div className="flex items-center justify-end gap-2">
-                    <span 
-                      className="text-xs text-zinc-400 cursor-pointer"
+                  <div className="flex items-center justify-end gap-3 min-w-[70px]">
+                    <span
+                      className="text-xs text-zinc-400 cursor-pointer whitespace-nowrap"
                       onClick={() => handlePlayTrack(index)}
                     >
                       {formatDuration(track.duration)}
                     </span>
-                    
-                    {/* Three-dot menu */}
-                    <div 
-                      className={`transition-opacity duration-200 ${
-                        isPlaylistModalOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'
+
+                    {/* Three-dot menu - wrapper stays relative for the dropdown inside */}
+                    <div
+                      className={`relative transition-opacity duration-200 ${
+                        isPlaylistModalOpen
+                          ? "opacity-0 pointer-events-none"
+                          : "opacity-100"
                       }`}
                       onClick={(e) => e.stopPropagation()}
                     >
@@ -384,8 +435,8 @@ const PlaylistDetail: React.FC = () => {
               </div>
               <p className="text-lg font-medium mb-2">This playlist is empty</p>
               <p className="text-sm mb-6">Add some tracks to get started!</p>
-              <button 
-                onClick={() => navigate('/search')}
+              <button
+                onClick={() => navigate("/search")}
                 className="px-6 py-3 bg-blue-500 text-black rounded-full font-bold hover:scale-105 transition"
               >
                 Search for Music
@@ -400,7 +451,7 @@ const PlaylistDetail: React.FC = () => {
         <div className="md:hidden mt-8 p-4 bg-zinc-900/50 rounded-lg border border-zinc-800">
           <p className="text-xs text-zinc-500 mb-1">About this playlist</p>
           <p className="text-sm text-zinc-300">
-            <span className="font-bold">{playlist.tracks.length}</span> songs • 
+            <span className="font-bold">{playlist.tracks.length}</span> songs •
             <span className="font-bold"> {getTotalDuration()}</span>
           </p>
           {playlist.createdAt && (

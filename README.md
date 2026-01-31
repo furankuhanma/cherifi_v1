@@ -13,18 +13,21 @@ Now that it's working, it can fetch music, the ai is working i will start to add
 
 ---
 
-the offline feature is now available so there are more things to add like
+there's a mistake in the backend. when the music get's stream it has to automatically be saved in the database table
+because in the listening history it cannot be recorded unless it's in the tracks table. and sometimes even if it's in the tracks table it does not save in the listening history, i think we need to identify everytime who is asking for the stream so we can save every song being stream and user who is streaming it
+
+---
+
+feature to add
 
 add or delete playlist
 account sidebar functional
-vibestream ai should be able to give music reccomendations that are clickable
+mariz ai should be able to give music reccomendations that are clickable
 keep message history
 be able to chat with friends and share music
 profile details like facebook
-user bug session fix
 
 and some ui fixes
-
 playlist track
 add to playlist ontoggle
 home page, add more music below (infinite scroll)
@@ -44,8 +47,3 @@ fetching efficiency (fetch once cache heavily)
 podcast
 
 home clickable playlist
-
-app should be open even without wifi
-
-there's a mistake in the backend. when the music get's stream it has to automatically be saved in the database table
-because in the listening history it cannot be recorded unless it's in the tracks table. and sometimes even if it's in the tracks table it does not save in the listening history, i think we need to identify everytime who is asking for the stream so we can save every song being stream and user who is streaming it
