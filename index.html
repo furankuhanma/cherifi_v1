@@ -12,21 +12,22 @@
     <meta name="apple-mobile-web-app-title" content="CheriFI" />
     <meta name="mobile-web-app-capable" content="yes" />
 
-    <link rel="manifest" href="/src/manifest.json" />
+    <!-- Fixed manifest path - removed /src/ prefix -->
+    <link rel="manifest" href="/manifest.json" />
 
     <!-- Apple Touch Icons -->
-    <link rel="apple-touch-icon" sizes="72x72" href="/public/icons/icon-72x72.png" />
-    <link rel="apple-touch-icon" sizes="96x96" href="/public/icons/icon-96x96.png" />
-    <link rel="apple-touch-icon" sizes="128x128" href="/public/icons/icon-128x128.png" />
-    <link rel="apple-touch-icon" sizes="144x144" href="/public/icons/icon-144x144.png" />
-    <link rel="apple-touch-icon" sizes="152x152" href="/public/icons/icon-152x152.png" />
-    <link rel="apple-touch-icon" sizes="192x192" href="/public/icons/icon-192x192.png" />
-    <link rel="apple-touch-icon" sizes="384x384" href="/public/icons/icon-384x384.png" />
-    <link rel="apple-touch-icon" sizes="512x512" href="/public/icons/icon-512x512.png" />
+    <link rel="apple-touch-icon" sizes="72x72" href="/icons/icon-72x72.png" />
+    <link rel="apple-touch-icon" sizes="96x96" href="/icons/icon-96x96.png" />
+    <link rel="apple-touch-icon" sizes="128x128" href="/icons/icon-128x128.png" />
+    <link rel="apple-touch-icon" sizes="144x144" href="/icons/icon-144x144.png" />
+    <link rel="apple-touch-icon" sizes="152x152" href="/icons/icon-152x152.png" />
+    <link rel="apple-touch-icon" sizes="192x192" href="/icons/icon-192x192.png" />
+    <link rel="apple-touch-icon" sizes="384x384" href="/icons/icon-384x384.png" />
+    <link rel="apple-touch-icon" sizes="512x512" href="/icons/icon-512x512.png" />
 
     <!-- Windows Tile -->
     <meta name="msapplication-TileColor" content="#000000" />
-    <meta name="msapplication-TileImage" content="/public/icons/icon-144x144.png" />
+    <meta name="msapplication-TileImage" content="/icons/icon-144x144.png" />
 
     <!-- Fonts & Styles -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -58,5 +59,80 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/public/src/index.tsx"></script>
+
+    <!-- Service Worker Registration -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          // Try to register service worker
+          const swPath = '/service-worker.js';
+          
+          console.log('🔍 Attempting to register Service Worker from:', swPath);
+          
+          navigator.serviceWorker
+            .register(swPath, { scope: '/' })
+            .then((registration) => {
+              console.log('✅ Service Worker registered successfully!');
+              console.log('   Scope:', registration.scope);
+              console.log('   Active:', !!registration.active);
+              console.log('   Installing:', !!registration.installing);
+              console.log('   Waiting:', !!registration.waiting);
+
+              // Check for updates periodically
+              setInterval(() => {
+                console.log('🔄 Checking for Service Worker updates...');
+                registration.update();
+              }, 60000); // Check every minute
+
+              // Handle updates
+              registration.addEventListener('updatefound', () => {
+                const newWorker = registration.installing;
+                console.log('🔄 Service Worker update found');
+
+                newWorker.addEventListener('statechange', () => {
+                  console.log('🔄 Service Worker state changed to:', newWorker.state);
+                  
+                  if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                    console.log('✨ New content available, refresh to update');
+                    
+                    // Optional: Show update notification to user
+                    if (confirm('New version available! Reload to update?')) {
+                      newWorker.postMessage({ type: 'SKIP_WAITING' });
+                      window.location.reload();
+                    }
+                  }
+                });
+              });
+            })
+            .catch((error) => {
+              console.error('❌ Service Worker registration failed:', error);
+              console.error('   Error name:', error.name);
+              console.error('   Error message:', error.message);
+              
+              // Additional debugging info
+              if (error.message.includes('404')) {
+                console.error('💡 Service worker file not found. Make sure service-worker.js exists in the public folder');
+              }
+            });
+
+          // Handle controller change (new SW activated)
+          navigator.serviceWorker.addEventListener('controllerchange', () => {
+            console.log('🔄 Service Worker controller changed, reloading page');
+            window.location.reload();
+          });
+        });
+      } else {
+        console.warn('⚠️ Service Workers are not supported in this browser');
+      }
+
+      // Network status monitoring
+      window.addEventListener('online', () => {
+        console.log('🌐 Back online');
+      });
+
+      window.addEventListener('offline', () => {
+        console.log('📵 Gone offline');
+      });
+    </script>
   </body>
 </html>

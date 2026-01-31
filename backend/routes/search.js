@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const YouTubeService = require('.../services/youtubeService');
+const YouTubeService = require('../services/youtubeService');
 const NodeCache = require('node-cache');
 
 // Initialize cache (TTL from env or default 1 hour)

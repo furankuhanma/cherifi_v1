@@ -12,7 +12,7 @@ const app = express();
 const PORT = process.env.PORT || 3002;
 
 // Import routes
-const searchRoutes = require('./audio_cache/routes/search');
+const searchRoutes = require('./routes/search');
 const streamRoutes = require('./routes/stream');
 const aiRoutes = require('./routes/ai');
 const playlistRoutes = require('./routes/playlist');
@@ -33,6 +33,7 @@ app.use((req, res, next) => {
     'http://localhost:3000',
     'http://localhost:4173',
     'http://localhost:4174',
+    'http://100.84.3.61:3000'
   ];
   
   // Set origin if it's in allowed list
@@ -63,6 +64,7 @@ app.use(cors({
 
     'http://localhost:4173',
     'http://localhost:4174',
+    'http://100.84.3.61:3000'
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],

@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CheriFI - Offline</title>
+    <meta name="theme-color" content="#3b82f6" />
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        background: linear-gradient(135deg, #09090b 0%, #18181b 100%);
+        color: #ffffff;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+      }
+
+      .container {
+        text-align: center;
+        max-width: 500px;
+      }
+
+      .icon {
+        width: 120px;
+        height: 120px;
+        margin: 0 auto 30px;
+        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        animation: pulse 2s ease-in-out infinite;
+      }
+
+      @keyframes pulse {
+        0%, 100% {
+          transform: scale(1);
+          opacity: 1;
+        }
+        50% {
+          transform: scale(1.05);
+          opacity: 0.8;
+        }
+      }
+
+      .icon svg {
+        width: 60px;
+        height: 60px;
+        stroke: white;
+        stroke-width: 2;
+        fill: none;
+      }
+
+      h1 {
+        font-size: 32px;
+        font-weight: 700;
+        margin-bottom: 16px;
+        background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+      }
+
+      p {
+        font-size: 16px;
+        color: #a1a1aa;
+        line-height: 1.6;
+        margin-bottom: 32px;
+      }
+
+      .retry-btn {
+        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+        color: white;
+        border: none;
+        padding: 14px 32px;
+        font-size: 16px;
+        font-weight: 600;
+        border-radius: 12px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+      }
+
+      .retry-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 16px rgba(59, 130, 246, 0.4);
+      }
+
+      .retry-btn:active {
+        transform: translateY(0);
+      }
+
+      .status {
+        margin-top: 24px;
+        padding: 12px 20px;
+        background: rgba(239, 68, 68, 0.1);
+        border: 1px solid rgba(239, 68, 68, 0.3);
+        border-radius: 8px;
+        color: #fca5a5;
+        font-size: 14px;
+        display: inline-block;
+      }
+
+      .features {
+        margin-top: 40px;
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 16px;
+        text-align: left;
+      }
+
+      .feature {
+        background: rgba(255, 255, 255, 0.05);
+        padding: 16px;
+        border-radius: 8px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+      }
+
+      .feature-title {
+        font-weight: 600;
+        margin-bottom: 8px;
+        color: #3b82f6;
+      }
+
+      .feature-desc {
+        font-size: 14px;
+        color: #a1a1aa;
+        margin: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="icon">
+        <svg viewBox="0 0 24 24">
+          <path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5z" 
+                stroke="currentColor" 
+                stroke-linecap="round" 
+                stroke-linejoin="round"/>
+          <path d="M12 8v4M12 16h.01" 
+                stroke="currentColor" 
+                stroke-linecap="round" 
+                stroke-linejoin="round"/>
+        </svg>
+      </div>
+
+      <h1>You're Offline</h1>
+      <p>
+        It looks like you've lost your internet connection. 
+        CheriFI needs an active connection to stream music and sync your library.
+      </p>
+
+      <button class="retry-btn" onclick="window.location.reload()">
+        Try Again
+      </button>
+
+      <div class="status">
+        No Internet Connection
+      </div>
+
+      <div class="features">
+        <div class="feature">
+          <div class="feature-title">📱 When you're back online</div>
+          <div class="feature-desc">
+            Your playlists, favorites, and settings will sync automatically
+          </div>
+        </div>
+        <div class="feature">
+          <div class="feature-title">🎵 Download for offline</div>
+          <div class="feature-desc">
+            Coming soon: Download your favorite tracks to listen offline
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // Auto-retry when connection is restored
+      window.addEventListener('online', () => {
+        console.log('Connection restored, reloading...');
+        setTimeout(() => {
+          window.location.reload();
+        }, 500);
+      });
+
+      // Check connection status
+      if (navigator.onLine) {
+        console.log('Actually online, attempting reload...');
+        window.location.reload();
+      }
+    </script>
+  </body>
+</html>
