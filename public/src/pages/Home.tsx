@@ -64,7 +64,7 @@ const HistoryCard: React.FC<HistoryCardProps> = ({
   const { playTrack } = usePlayer();
 
   return (
-    <div className="bg-zinc-900 bg-opacity-40 p-3 rounded-lg hover:bg-zinc-800 transition group cursor-pointer w-[140px] md:w-[180px] flex-shrink-0 relative z-0 hover:z-50">
+    <div className="bg-zinc-900 bg-opacity-40 p-3 rounded-lg hover:bg-zinc-800 transition group cursor-pointer w-[140px] md:w-[180px] flex-shrink-0 relative z-0 hover:z-10">
       {/* Three-dot menu */}
       <div
         className={`absolute top-2 right-2 z-10 transition-opacity duration-200 ${
@@ -107,6 +107,7 @@ const HistoryCard: React.FC<HistoryCardProps> = ({
 };
 
 const Home: React.FC = () => {
+  const navigate = useNavigate();
   const hour = new Date().getHours();
   const greeting =
     hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
@@ -285,7 +286,7 @@ const Home: React.FC = () => {
               <div
                 key={playlist.id}
                 className="flex items-center gap-3 bg-white bg-opacity-5 rounded overflow-hidden hover:bg-white hover:bg-opacity-10 transition-all cursor-pointer group h-14 md:h-20"
-                onClick={() => handleQuickPlaylistClick(playlist)}
+                onClick={() => navigate(`/playlist/${playlist.id}`)}
               >
                 <img
                   src={playlist.coverUrl}
