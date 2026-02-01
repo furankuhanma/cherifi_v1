@@ -233,7 +233,28 @@ export const trackAPI = {
       console.error('Unlike track failed:', error);
       throw error;
     }
+  },
+
+   getRandomTracks: async (page: number = 1, limit: number = 30): Promise<{
+  tracks: Track[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+    hasMore: boolean;
+  };
+}> => {
+  try {
+    const response = await apiClient.get('/tracks/random', {
+      params: { page, limit }
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Get random tracks failed:', error);
+    throw error;
   }
+}
 
 };
 

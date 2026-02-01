@@ -1,7 +1,7 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { MoreVertical, Plus, Heart, Download, Music2, X } from 'lucide-react';
-import { Track } from '../types/types';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useState, useRef, useEffect } from "react";
+import { MoreVertical, Plus, Heart, Download, Music2, X } from "lucide-react";
+import { Track } from "../types/types";
+import { motion, AnimatePresence } from "framer-motion";
 
 interface TrackOptionsMenuProps {
   track: Track;
@@ -24,6 +24,19 @@ const TrackOptionsMenu: React.FC<TrackOptionsMenuProps> = ({
   const menuRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
+  // Inside TrackOptionsMenu component
+  useEffect(() => {
+    if (isOpen) {
+      // Add a class to body when menu is open
+      document.body.classList.add("menu-open");
+    } else {
+      document.body.classList.remove("menu-open");
+    }
+
+    return () => {
+      document.body.classList.remove("menu-open");
+    };
+  }, [isOpen]);
   // Close menu when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -38,28 +51,28 @@ const TrackOptionsMenu: React.FC<TrackOptionsMenuProps> = ({
     };
 
     if (isOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener("mousedown", handleClickOutside);
     }
 
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener("mousedown", handleClickOutside);
     };
   }, [isOpen]);
 
   // Close menu on escape key
   useEffect(() => {
     const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
+      if (event.key === "Escape") {
         setIsOpen(false);
       }
     };
 
     if (isOpen) {
-      document.addEventListener('keydown', handleEscape);
+      document.addEventListener("keydown", handleEscape);
     }
 
     return () => {
-      document.removeEventListener('keydown', handleEscape);
+      document.removeEventListener("keydown", handleEscape);
     };
   }, [isOpen]);
 
@@ -72,6 +85,16 @@ const TrackOptionsMenu: React.FC<TrackOptionsMenuProps> = ({
     action();
     setIsOpen(false);
   };
+
+  // ADD THIS TRIGGER HERE
+  useEffect(() => {
+    if (isOpen) {
+      document.body.classList.add("menu-open");
+    } else {
+      document.body.classList.remove("menu-open");
+    }
+    return () => document.body.classList.remove("menu-open");
+  }, [isOpen]);
 
   return (
     <div className="relative">
@@ -94,18 +117,20 @@ const TrackOptionsMenu: React.FC<TrackOptionsMenuProps> = ({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="md:hidden fixed inset-0 z-[90] bg-black/60 backdrop-blur-sm animate-in fade-in duration-100"
+              // Increased to 120 to jump over the player
+              className="md:hidden fixed inset-0 z-[120] bg-black/60 backdrop-blur-sm"
               onClick={() => setIsOpen(false)}
             />
 
             {/* Menu Panel */}
             <motion.div
               ref={menuRef}
-              initial={{ opacity: 0, y: 0 }} // Mobile starts at bottom
-              animate={{ opacity: 1, y: 0 }}   // Slides up
-              exit={{ opacity: 0, y: 100 }}    // Slides back down
-              transition={{duration: 0.3, ease: "easeOut"}}
-              className="fixed md:absolute bottom-0 md:bottom-auto left-0 right-0 md:left-auto md:right-0 md:top-full md:mt-2 z-[100] md:w-64 bg-zinc-900 border border-zinc-800 rounded-t-2xl md:rounded-xl shadow-2xl animate-in slide-in-from-bottom md:slide-in-from-top-2 duration-300"
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", damping: 25, stiffness: 200 }}
+              // inset-x-0 is cleaner for full width; z-[130] puts it on the very top
+              className="fixed md:absolute bottom-0 md:bottom-auto inset-x-0 md:inset-x-auto md:right-0 md:top-full md:mt-2 z-[130] md:w-64 bg-zinc-900 border border-zinc-800 rounded-t-2xl md:rounded-xl shadow-2xl"
             >
               {/* Mobile Header */}
               <div className="md:hidden flex items-center justify-between p-4 border-b border-zinc-800">
@@ -116,8 +141,12 @@ const TrackOptionsMenu: React.FC<TrackOptionsMenuProps> = ({
                     className="w-10 h-10 rounded object-cover flex-shrink-0"
                   />
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-bold text-sm truncate">{track.title}</h3>
-                    <p className="text-xs text-zinc-400 truncate">{track.artist}</p>
+                    <h3 className="font-bold text-sm truncate">
+                      {track.title}
+                    </h3>
+                    <p className="text-xs text-zinc-400 truncate">
+                      {track.artist}
+                    </p>
                   </div>
                 </div>
                 <button
@@ -133,15 +162,22 @@ const TrackOptionsMenu: React.FC<TrackOptionsMenuProps> = ({
                 {/* Add to Playlist */}
                 {onAddToPlaylist && (
                   <button
-                    onClick={() => handleMenuAction(() => onAddToPlaylist(track))}
+                    onClick={() =>
+                      handleMenuAction(() => onAddToPlaylist(track))
+                    }
                     className="w-full px-4 py-3 hover:bg-zinc-800 transition flex items-center gap-3 text-left group"
                   >
                     <div className="bg-zinc-800 group-hover:bg-zinc-700 p-2 rounded transition">
-                      <Plus size={18} className="text-zinc-400 group-hover:text-white" />
+                      <Plus
+                        size={18}
+                        className="text-zinc-400 group-hover:text-white"
+                      />
                     </div>
                     <div>
                       <p className="font-medium text-sm">Add to Playlist</p>
-                      <p className="text-xs text-zinc-500">Save to your collection</p>
+                      <p className="text-xs text-zinc-500">
+                        Save to your collection
+                      </p>
                     </div>
                   </button>
                 )}
@@ -152,55 +188,65 @@ const TrackOptionsMenu: React.FC<TrackOptionsMenuProps> = ({
                     onClick={() => handleMenuAction(() => onToggleLike(track))}
                     className="w-full px-4 py-3 hover:bg-zinc-800 transition flex items-center gap-3 text-left group"
                   >
-                    <div className={`p-2 rounded transition ${isLiked
-                        ? 'bg-blue-500/20 group-hover:bg-blue-500/30'
-                        : 'bg-zinc-800 group-hover:bg-zinc-700'
-                      }`}>
+                    <div
+                      className={`p-2 rounded transition ${
+                        isLiked
+                          ? "bg-blue-500/20 group-hover:bg-blue-500/30"
+                          : "bg-zinc-800 group-hover:bg-zinc-700"
+                      }`}
+                    >
                       <Heart
                         size={18}
-                        className={`transition ${isLiked
-                            ? 'text-blue-500 fill-blue-500'
-                            : 'text-zinc-400 group-hover:text-white'
-                          }`}
+                        className={`transition ${
+                          isLiked
+                            ? "text-blue-500 fill-blue-500"
+                            : "text-zinc-400 group-hover:text-white"
+                        }`}
                       />
                     </div>
                     <div>
                       <p className="font-medium text-sm">
-                        {isLiked ? 'Remove from Liked Songs' : 'Save to Liked Songs'}
+                        {isLiked
+                          ? "Remove from Liked Songs"
+                          : "Save to Liked Songs"}
                       </p>
                       <p className="text-xs text-zinc-500">
-                        {isLiked ? 'Remove from your favorites' : 'Add to your favorites'}
+                        {isLiked
+                          ? "Remove from your favorites"
+                          : "Add to your favorites"}
                       </p>
                     </div>
                   </button>
                 )}
 
                 {/* Download Music - NOW SAVES TO INDEXEDDB (Spotify-style) */}
+                {/* Example: Only show one download button to save space */}
                 {onDownload && (
                   <button
                     onClick={() => handleMenuAction(() => onDownload(track))}
-                    className={`w-full px-4 py-3 transition flex items-center gap-3 text-left group ${isDownloaded ? 'opacity-75' : 'hover:bg-zinc-800'
-                      }`}
+                    className={`w-full px-4 py-3 transition flex items-center gap-3 text-left group ${
+                      isDownloaded ? "opacity-75" : "hover:bg-zinc-800"
+                    }`}
                     disabled={isDownloaded}
                   >
-                    <div className={`p-2 rounded transition ${isDownloaded
-                        ? 'bg-blue-500/20'
-                        : 'bg-zinc-800 group-hover:bg-zinc-700'
-                      }`}>
-                      <Music2
+                    <div
+                      className={`p-2 rounded transition ${isDownloaded ? "bg-blue-500/20" : "bg-zinc-800 group-hover:bg-zinc-700"}`}
+                    >
+                      <Download
                         size={18}
-                        className={`transition ${isDownloaded
-                            ? 'text-blue-500'
-                            : 'text-zinc-400 group-hover:text-white'
-                          }`}
+                        className={
+                          isDownloaded
+                            ? "text-blue-500"
+                            : "text-zinc-400 group-hover:text-white"
+                        }
                       />
                     </div>
                     <div>
                       <p className="font-medium text-sm">
-                        {isDownloaded ? 'Available Offline' : 'Download Music'}
+                        {isDownloaded ? "Downloaded" : "Download"}
                       </p>
                       <p className="text-xs text-zinc-500">
-                        {isDownloaded ? 'Saved in your library' : 'Save for offline listening'}
+                        Listen without internet
                       </p>
                     </div>
                   </button>
@@ -210,28 +256,37 @@ const TrackOptionsMenu: React.FC<TrackOptionsMenuProps> = ({
                 {onDownload && (
                   <button
                     onClick={() => handleMenuAction(() => onDownload(track))}
-                    className={`w-full px-4 py-3 transition flex items-center gap-3 text-left group ${isDownloaded ? 'opacity-75' : 'hover:bg-zinc-800'
-                      }`}
+                    className={`w-full px-4 py-3 transition flex items-center gap-3 text-left group ${
+                      isDownloaded ? "opacity-75" : "hover:bg-zinc-800"
+                    }`}
                     disabled={isDownloaded}
                   >
-                    <div className={`p-2 rounded transition ${isDownloaded
-                        ? 'bg-blue-500/20'
-                        : 'bg-zinc-800 group-hover:bg-zinc-700'
-                      }`}>
+                    <div
+                      className={`p-2 rounded transition ${
+                        isDownloaded
+                          ? "bg-blue-500/20"
+                          : "bg-zinc-800 group-hover:bg-zinc-700"
+                      }`}
+                    >
                       <Download
                         size={18}
-                        className={`transition ${isDownloaded
-                            ? 'text-blue-500'
-                            : 'text-zinc-400 group-hover:text-white'
-                          }`}
+                        className={`transition ${
+                          isDownloaded
+                            ? "text-blue-500"
+                            : "text-zinc-400 group-hover:text-white"
+                        }`}
                       />
                     </div>
                     <div>
                       <p className="font-medium text-sm">
-                        {isDownloaded ? 'Available Offline' : 'Download for Offline'}
+                        {isDownloaded
+                          ? "Available Offline"
+                          : "Download for Offline"}
                       </p>
                       <p className="text-xs text-zinc-500">
-                        {isDownloaded ? 'Saved in your library' : 'Listen without internet'}
+                        {isDownloaded
+                          ? "Saved in your library"
+                          : "Listen without internet"}
                       </p>
                     </div>
                   </button>
@@ -247,8 +302,12 @@ const TrackOptionsMenu: React.FC<TrackOptionsMenuProps> = ({
                     className="w-8 h-8 rounded object-cover flex-shrink-0"
                   />
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium truncate">{track.title}</p>
-                    <p className="text-xs text-zinc-500 truncate">{track.artist}</p>
+                    <p className="text-xs font-medium truncate">
+                      {track.title}
+                    </p>
+                    <p className="text-xs text-zinc-500 truncate">
+                      {track.artist}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -257,7 +316,6 @@ const TrackOptionsMenu: React.FC<TrackOptionsMenuProps> = ({
         )}
       </AnimatePresence>
     </div>
-
   );
 };
 

@@ -26,7 +26,6 @@ keep message history
 be able to chat with friends and share music
 profile details like facebook
 
-and some ui fixes
 home page, add more music below (infinite scroll)
 
 playlist image

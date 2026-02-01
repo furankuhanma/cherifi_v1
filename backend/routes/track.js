@@ -6,14 +6,63 @@ const { authenticateToken } = require('../middleware/auth');
 
 router.use(authenticateToken);
 
+// 🆕 GET /api/tracks/random - Get random tracks with pagination
+router.get('/random', async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 30;
+    const offset = (page - 1) * limit;
+
+    console.log(`📦 Fetching random tracks: page=${page}, limit=${limit}, offset=${offset}`);
+
+    // Get total count of tracks
+    const countResult = await database.query(
+      'SELECT COUNT(*) as total FROM tracks'
+    );
+    const total = countResult[0].total;
+
+    // 🔧 FINAL FIX: Build the query string directly
+    // Safe because limit and offset are validated integers via parseInt()
+    const tracks = await database.query(
+      `SELECT * FROM tracks ORDER BY RAND() LIMIT ${limit} OFFSET ${offset}`
+    );
+
+    // Format tracks
+    const formattedTracks = tracks.map(track => Track.formatTrack(track));
+
+    // Calculate pagination info
+    const totalPages = Math.ceil(total / limit);
+    const hasMore = page < totalPages;
+
+    console.log(`✅ Returned ${formattedTracks.length} random tracks (page ${page}/${totalPages})`);
+
+    res.json({
+      tracks: formattedTracks,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages,
+        hasMore
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Get random tracks failed:', error);
+    console.error('Full error stack:', error.stack);
+    res.status(500).json({ 
+      error: 'Failed to fetch random tracks', 
+      message: error.message 
+    });
+  }
+});
 
 // DELETE /api/tracks/like/:videoId
 router.delete('/like/:videoId', async (req, res) => {
   const { videoId } = req.params;
-  const userId = req.user.id; // Assuming you have auth middleware
+  const userId = req.user.id;
 
   try {
-    // We need the internal DB ID to delete from the junction table
     const track = await Track.findByVideoId(videoId);
     
     if (!track) {
@@ -31,9 +80,9 @@ router.delete('/like/:videoId', async (req, res) => {
     res.status(500).json({ error: 'Failed to unlike track' });
   }
 });
+
 /**
  * GET /api/tracks/liked
- * Fetches all tracks liked by the current user
  */
 router.get('/liked', async (req, res) => {
   try {
@@ -54,17 +103,14 @@ router.get('/liked', async (req, res) => {
 
 /**
  * POST /api/tracks/like
- * Saves a track to the DB and marks it as liked by the user
  */
 router.post('/like', async (req, res) => {
   try {
     const { videoId, trackData } = req.body;
     const userId = req.user.id;
 
-    // 1. Save/Update track metadata in 'tracks' table
     const track = await Track.save({ videoId, ...trackData });
 
-    // 2. Link user to track in 'liked_tracks' table
     await database.query(
       'INSERT IGNORE INTO liked_tracks (user_id, track_id) VALUES (?, ?)',
       [userId, track.dbId]

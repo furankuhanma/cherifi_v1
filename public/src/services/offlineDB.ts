@@ -1,12 +1,13 @@
 /**
- * IndexedDB Service for Offline Audio Storage
- * Stores actual audio file blobs for offline playback
+ * IndexedDB Service for Offline Audio Storage + Track Cache
+ * Stores actual audio file blobs for offline playback + cached random tracks
  */
 
 const DB_NAME = 'VibeStreamOffline';
-const DB_VERSION = 1;
+const DB_VERSION = 2; // ⬆️ Incremented version to add new store
 const AUDIO_STORE = 'audioFiles';
 const METADATA_STORE = 'trackMetadata';
+const TRACK_CACHE = 'trackCache'; // 🆕 New store for caching random tracks
 
 interface AudioFile {
   videoId: string;
@@ -28,8 +29,18 @@ interface TrackMetadata {
   playCount: number;
 }
 
+// 🆕 Cache entry structure
+interface CachedTrack {
+  videoId: string;
+  track: any; // Your Track type
+  cachedAt: string;
+  expiresAt: string;
+  page: number; // Which page this track came from
+}
+
 class OfflineDB {
   private db: IDBDatabase | null = null;
+  private readonly CACHE_DURATION = 60 * 60 * 1000; // 1 hour in milliseconds
 
   /**
    * Initialize IndexedDB
@@ -52,14 +63,14 @@ class OfflineDB {
       request.onupgradeneeded = (event: IDBVersionChangeEvent) => {
         const db = (event.target as IDBOpenDBRequest).result;
 
-        // Audio files store
+        // Audio files store (existing)
         if (!db.objectStoreNames.contains(AUDIO_STORE)) {
           const audioStore = db.createObjectStore(AUDIO_STORE, { keyPath: 'videoId' });
           audioStore.createIndex('downloadedAt', 'downloadedAt', { unique: false });
           audioStore.createIndex('size', 'size', { unique: false });
         }
 
-        // Track metadata store
+        // Track metadata store (existing)
         if (!db.objectStoreNames.contains(METADATA_STORE)) {
           const metadataStore = db.createObjectStore(METADATA_STORE, { keyPath: 'videoId' });
           metadataStore.createIndex('title', 'title', { unique: false });
@@ -67,7 +78,16 @@ class OfflineDB {
           metadataStore.createIndex('downloadedAt', 'downloadedAt', { unique: false });
         }
 
-        console.log('✅ IndexedDB schema created');
+        // 🆕 Track cache store (new)
+        if (!db.objectStoreNames.contains(TRACK_CACHE)) {
+          const cacheStore = db.createObjectStore(TRACK_CACHE, { keyPath: 'videoId' });
+          cacheStore.createIndex('expiresAt', 'expiresAt', { unique: false });
+          cacheStore.createIndex('page', 'page', { unique: false });
+          cacheStore.createIndex('cachedAt', 'cachedAt', { unique: false });
+          console.log('✅ Track cache store created');
+        }
+
+        console.log('✅ IndexedDB schema updated to version', DB_VERSION);
       };
     });
   }
@@ -81,6 +101,8 @@ class OfflineDB {
     }
     return this.db!;
   }
+
+  // ==================== EXISTING METHODS ====================
 
   /**
    * Save audio file to IndexedDB
@@ -320,6 +342,216 @@ class OfflineDB {
       this.deleteMetadata(videoId),
     ]);
     console.log(`✅ Track completely removed: ${videoId}`);
+  }
+
+  // ==================== 🆕 NEW CACHE METHODS ====================
+
+  /**
+   * Cache tracks from a page
+   */
+  async cacheTracks(tracks: any[], page: number): Promise<void> {
+    const db = await this.ensureDB();
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + this.CACHE_DURATION);
+
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction([TRACK_CACHE], 'readwrite');
+      const store = transaction.objectStore(TRACK_CACHE);
+
+      // Store each track
+      tracks.forEach((track) => {
+        const cachedTrack: CachedTrack = {
+          videoId: track.videoId || track.id,
+          track,
+          cachedAt: now.toISOString(),
+          expiresAt: expiresAt.toISOString(),
+          page,
+        };
+
+        store.put(cachedTrack);
+      });
+
+      transaction.oncomplete = () => {
+        console.log(`✅ Cached ${tracks.length} tracks from page ${page}`);
+        resolve();
+      };
+
+      transaction.onerror = () => {
+        console.error('❌ Failed to cache tracks');
+        reject(transaction.error);
+      };
+    });
+  }
+
+  /**
+   * Get cached tracks (non-expired only)
+   */
+  async getCachedTracks(limit?: number): Promise<any[]> {
+    const db = await this.ensureDB();
+    const now = new Date().toISOString();
+
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction([TRACK_CACHE], 'readonly');
+      const store = transaction.objectStore(TRACK_CACHE);
+      const request = store.getAll();
+
+      request.onsuccess = () => {
+        const cached = request.result as CachedTrack[];
+        
+        // Filter out expired tracks
+        const validTracks = cached
+          .filter((entry) => entry.expiresAt > now)
+          .map((entry) => entry.track);
+
+        // Apply limit if specified
+        const result = limit ? validTracks.slice(0, limit) : validTracks;
+        
+        console.log(`📦 Retrieved ${result.length} cached tracks (${validTracks.length} valid, ${cached.length} total)`);
+        resolve(result);
+      };
+
+      request.onerror = () => {
+        console.error('❌ Failed to get cached tracks');
+        reject(request.error);
+      };
+    });
+  }
+
+  /**
+   * Check if we have cached tracks
+   */
+  async hasCachedTracks(): Promise<boolean> {
+    const tracks = await this.getCachedTracks();
+    return tracks.length > 0;
+  }
+
+  /**
+   * Get count of cached tracks
+   */
+  async getCachedTrackCount(): Promise<number> {
+    const db = await this.ensureDB();
+    const now = new Date().toISOString();
+
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction([TRACK_CACHE], 'readonly');
+      const store = transaction.objectStore(TRACK_CACHE);
+      const request = store.getAll();
+
+      request.onsuccess = () => {
+        const cached = request.result as CachedTrack[];
+        const validCount = cached.filter((entry) => entry.expiresAt > now).length;
+        resolve(validCount);
+      };
+
+      request.onerror = () => {
+        console.error('❌ Failed to count cached tracks');
+        reject(request.error);
+      };
+    });
+  }
+
+  /**
+   * Clear expired cache entries
+   */
+  async clearExpiredCache(): Promise<number> {
+    const db = await this.ensureDB();
+    const now = new Date().toISOString();
+    let deletedCount = 0;
+
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction([TRACK_CACHE], 'readwrite');
+      const store = transaction.objectStore(TRACK_CACHE);
+      const index = store.index('expiresAt');
+      
+      // Get all expired entries
+      const range = IDBKeyRange.upperBound(now);
+      const request = index.openCursor(range);
+
+      request.onsuccess = (event) => {
+        const cursor = (event.target as IDBRequest).result;
+        if (cursor) {
+          cursor.delete();
+          deletedCount++;
+          cursor.continue();
+        }
+      };
+
+      transaction.oncomplete = () => {
+        if (deletedCount > 0) {
+          console.log(`🗑️ Cleared ${deletedCount} expired cache entries`);
+        }
+        resolve(deletedCount);
+      };
+
+      transaction.onerror = () => {
+        console.error('❌ Failed to clear expired cache');
+        reject(transaction.error);
+      };
+    });
+  }
+
+  /**
+   * Clear all cached tracks
+   */
+  async clearTrackCache(): Promise<void> {
+    const db = await this.ensureDB();
+
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction([TRACK_CACHE], 'readwrite');
+      const store = transaction.objectStore(TRACK_CACHE);
+      const request = store.clear();
+
+      request.onsuccess = () => {
+        console.log('✅ Track cache cleared');
+        resolve();
+      };
+
+      request.onerror = () => {
+        console.error('❌ Failed to clear track cache');
+        reject(request.error);
+      };
+    });
+  }
+
+  /**
+   * Get cache statistics
+   */
+  async getCacheStats(): Promise<{
+    totalCached: number;
+    validCached: number;
+    expiredCached: number;
+    oldestCache: string | null;
+    newestCache: string | null;
+  }> {
+    const db = await this.ensureDB();
+    const now = new Date().toISOString();
+
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction([TRACK_CACHE], 'readonly');
+      const store = transaction.objectStore(TRACK_CACHE);
+      const request = store.getAll();
+
+      request.onsuccess = () => {
+        const cached = request.result as CachedTrack[];
+        const validEntries = cached.filter((entry) => entry.expiresAt > now);
+        const expiredEntries = cached.filter((entry) => entry.expiresAt <= now);
+
+        const cachedAtDates = cached.map((entry) => entry.cachedAt).sort();
+
+        resolve({
+          totalCached: cached.length,
+          validCached: validEntries.length,
+          expiredCached: expiredEntries.length,
+          oldestCache: cachedAtDates.length > 0 ? cachedAtDates[0] : null,
+          newestCache: cachedAtDates.length > 0 ? cachedAtDates[cachedAtDates.length - 1] : null,
+        });
+      };
+
+      request.onerror = () => {
+        console.error('❌ Failed to get cache stats');
+        reject(request.error);
+      };
+    });
   }
 }
 

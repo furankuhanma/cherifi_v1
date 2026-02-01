@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Play } from "lucide-react";
+import { Play, RefreshCw } from "lucide-react";
 import { Playlist, Track } from "../types/types";
 import { usePlayer } from "../context/PlayerContext";
 import { useLibrary } from "../context/LibraryContext";
@@ -10,6 +10,7 @@ import { searchAPI, trackAPI, historyAPI } from "../services/api";
 import TrackOptionsMenu from "../components/TrackOptionsMenu";
 import AddToPlaylistModal from "../components/AddToPlayListModal";
 import { WifiOff } from "lucide-react";
+import useInfiniteScroll from "../hooks/useInfiniteScroll";
 
 interface PlaylistCardProps {
   playlist: Playlist;
@@ -147,7 +148,7 @@ const Home: React.FC = () => {
     hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
 
   const { playlists, isLoading: playlistsLoading } = useLibrary();
-  const { setPlaylist } = usePlayer();
+  const { setPlaylist, playTrack } = usePlayer(); // 🔧 FIX: Get playTrack at component level
   const { isLiked, toggleLike } = useLikes();
   const { isDownloaded, downloadTrack } = useDownloads();
 
@@ -166,6 +167,20 @@ const Home: React.FC = () => {
 
   const [historyTracks, setHistoryTracks] = useState<Track[]>([]);
   const [isLoadinHistory, setIsLoadingHistory] = useState(false);
+
+  // 🆕 Infinite scroll hook for Discover section
+  const {
+    tracks: discoverTracks,
+    isLoading: isLoadingDiscover,
+    isLoadingMore: isLoadingMoreDiscover,
+    hasMore: hasMoreDiscover,
+    error: discoverError,
+    refresh: refreshDiscover,
+  } = useInfiniteScroll({
+    initialLoad: true,
+    loadMoreThreshold: 500,
+    pageSize: 30,
+  });
 
   const loadHistory = async () => {
     setIsLoadingHistory(true);
@@ -350,7 +365,7 @@ const Home: React.FC = () => {
           <div className="flex gap-2 overflow-x-auto no-scrollbar pb-4 -mx-4 px-4 md:mx-0 md:px-0 scroll-smooth">
             {historyTracks.slice(0, 10).map((track, index) => (
               <HistoryCard
-                key={`history-${track.id}-${index}`} // Index added because same song can be in history twice
+                key={`history-${track.id}-${index}`}
                 track={track}
                 onAddToPlaylist={handleAddToPlaylist}
                 onToggleLike={handleToggleLike}
@@ -380,7 +395,7 @@ const Home: React.FC = () => {
                 onAddToPlaylist={handleAddToPlaylist}
                 onToggleLike={handleToggleLike}
                 onDownload={handleDownload}
-                isLiked={true} // Since they are from the Liked fetch, we know this is true
+                isLiked={true}
                 isDownloaded={isDownloaded(track.id)}
                 isPlaylistModalOpen={isPlaylistModalOpen}
               />
@@ -502,6 +517,127 @@ const Home: React.FC = () => {
           </div>
         </section>
       )}
+
+      {/* 🆕 5. DISCOVER SECTION - INFINITE SCROLL */}
+      <section className="pb-8">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl md:text-2xl font-bold tracking-tight">
+            Discover Music
+          </h2>
+          {!isLoadingDiscover && !discoverError && (
+            <button
+              onClick={refreshDiscover}
+              className="text-xs font-bold text-zinc-400 hover:text-white hover:underline flex items-center gap-1"
+            >
+              <RefreshCw size={14} />
+              Refresh
+            </button>
+          )}
+        </div>
+
+        {/* Initial Loading State */}
+        {isLoadingDiscover && discoverTracks.length === 0 && (
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((i) => (
+              <div key={i} className="flex flex-col">
+                <div className="aspect-square bg-zinc-800 rounded-lg mb-3 animate-pulse" />
+                <div className="h-4 bg-zinc-800 rounded mb-2 animate-pulse" />
+                <div className="h-3 bg-zinc-800 rounded w-2/3 animate-pulse" />
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Error State */}
+        {!isLoadingDiscover && discoverError && discoverTracks.length === 0 && (
+          <div className="rounded-lg p-8 text-center">
+            <WifiOff className="mx-auto mb-3 text-red-400" size={48} />
+            <p className="text-red-400 mb-4">{discoverError}</p>
+            <button
+              onClick={refreshDiscover}
+              className="rounded-2xl font-bold bg-blue-600 px-6 py-3 text-sm text-black hover:scale-105 transition"
+            >
+              Try Again
+            </button>
+          </div>
+        )}
+
+        {/* Tracks Grid */}
+        {discoverTracks.length > 0 && (
+          <>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+              {discoverTracks.map((track) => (
+                <div
+                  key={track.videoId || track.id}
+                  className="bg-zinc-900 bg-opacity-40 p-3 rounded-lg hover:bg-zinc-800 transition group cursor-pointer relative z-0 hover:z-30"
+                >
+                  {/* 🔧 FIX: Three-dot menu with proper z-index */}
+                  <div
+                    className={`absolute top-2 right-2 z-20 transition-opacity duration-200 ${
+                      isPlaylistModalOpen
+                        ? "opacity-0 pointer-events-none"
+                        : "opacity-100"
+                    }`}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <TrackOptionsMenu
+                      track={track}
+                      onAddToPlaylist={handleAddToPlaylist}
+                      onToggleLike={handleToggleLike}
+                      onDownload={handleDownload}
+                      isLiked={isLiked(track.id)}
+                      isDownloaded={isDownloaded(track.id)}
+                    />
+                  </div>
+
+                  {/* 🔧 FIX: Track card content - use playTrack from hook */}
+                  <div onClick={() => playTrack(track)}>
+                    <div className="relative mb-3 aspect-square shadow-md overflow-hidden rounded-lg">
+                      <img
+                        src={track.coverUrl}
+                        alt={track.title}
+                        className="object-cover w-full h-full transition duration-500 group-hover:scale-105"
+                      />
+                      <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all duration-300 flex items-center justify-center">
+                        <button className="bg-blue-400 p-3 rounded-full shadow-2xl opacity-0 scale-90 group-hover:opacity-100 group-hover:scale-100 transition duration-300">
+                          <Play size={20} className="text-black fill-current" />
+                        </button>
+                      </div>
+                    </div>
+                    <h3 className="font-bold text-xs md:text-sm truncate text-white">
+                      {track.title}
+                    </h3>
+                    <p className="text-[10px] md:text-xs text-zinc-400 truncate mt-0.5">
+                      {track.artist}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Load More Indicator */}
+            {isLoadingMoreDiscover && (
+              <div className="flex justify-center py-8">
+                <div className="flex flex-col items-center gap-3">
+                  <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                  <p className="text-sm text-zinc-400">
+                    Loading more tracks...
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* No More Tracks */}
+            {!hasMoreDiscover && !isLoadingMoreDiscover && (
+              <div className="text-center py-8">
+                <p className="text-zinc-400 text-sm">
+                  🎵 You've reached the end! Refresh to discover more.
+                </p>
+              </div>
+            )}
+          </>
+        )}
+      </section>
 
       {/* Add to Playlist Modal */}
       <AddToPlaylistModal
