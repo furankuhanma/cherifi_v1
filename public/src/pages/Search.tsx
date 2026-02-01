@@ -1,16 +1,18 @@
-import React, { useState, useEffect } from 'react';
-import { Search as SearchIcon } from 'lucide-react';
-import { CATEGORIES } from '../constants';
-import { Track } from '../types/types';
-import { searchAPI } from '../services/api';
-import { usePlayer } from '../context/PlayerContext';
-import { useLikes } from '../context/LikeContext';
-import { useDownloads } from '../context/DownloadContext';
-import TrackOptionsMenu from '../components/TrackOptionsMenu';
-import AddToPlaylistModal from '../components/AddToPlayListModal';
+import React, { useState, useEffect } from "react";
+import { Search as SearchIcon } from "lucide-react";
+import { CATEGORIES } from "../constants";
+import { Track } from "../types/types";
+import { searchAPI } from "../services/api";
+import { usePlayer } from "../context/PlayerContext";
+import { useLikes } from "../context/LikeContext";
+import { useDownloads } from "../context/DownloadContext";
+import TrackOptionsMenu from "../components/TrackOptionsMenu";
+import AddToPlaylistModal from "../components/AddToPlayListModal";
+import { useSearchParams } from "react-router-dom";
 
 const Search: React.FC = () => {
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchParams] = useSearchParams();
+  const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<Track[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
@@ -24,6 +26,13 @@ const Search: React.FC = () => {
   const { isLiked, toggleLike } = useLikes();
   const { isDownloaded, downloadTrack } = useDownloads();
 
+  useEffect(() => {
+    const queryFromUrl = searchParams.get("q");
+    if (queryFromUrl) {
+      setSearchQuery(queryFromUrl);
+      handleSearch(queryFromUrl);
+    }
+  }, [searchParams]);
   // Debounced search
   useEffect(() => {
     if (!searchQuery.trim()) {
@@ -55,8 +64,9 @@ const Search: React.FC = () => {
       setSearchResults(results);
       console.log(`✅ Found ${results.length} results`);
     } catch (error: any) {
-      const errorMsg = error.response?.data?.message || error.message || 'Search failed';
-      console.error('❌ Search error:', errorMsg);
+      const errorMsg =
+        error.response?.data?.message || error.message || "Search failed";
+      console.error("❌ Search error:", errorMsg);
       setSearchError(errorMsg);
       setSearchResults([]);
     } finally {
@@ -94,7 +104,7 @@ const Search: React.FC = () => {
     try {
       await downloadTrack(track);
     } catch (error) {
-      console.error('Download failed:', error);
+      console.error("Download failed:", error);
     }
   };
 
@@ -107,36 +117,43 @@ const Search: React.FC = () => {
 
       // Check if track has videoId
       if (!track.videoId) {
-        console.error('❌ No videoId available for download');
+        console.error("❌ No videoId available for download");
         return;
       }
 
       // Fetch stream URL from API
       const response = await fetch(`/api/stream/${track.videoId}`);
       if (!response.ok) {
-        throw new Error('Failed to fetch stream URL');
+        throw new Error("Failed to fetch stream URL");
       }
 
       const streamData = await response.json();
 
       // Create a temporary link element
-      const link = document.createElement('a');
+      const link = document.createElement("a");
       link.href = streamData.url;
       link.download = `${track.artist} - ${track.title}.mp3`;
-      link.target = '_blank';
+      link.target = "_blank";
 
       // Trigger download
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
 
-      console.log('✅ Music download started');
+      console.log("✅ Music download started");
     } catch (error) {
-      console.error('❌ Music download failed:', error);
+      console.error("❌ Music download failed:", error);
     }
   };
 
-  const categories = ["Songs", "Playlists", "Artists", "Podcasts", "Albums", "Genres & Moods"]
+  const categories = [
+    "Songs",
+    "Playlists",
+    "Artists",
+    "Podcasts",
+    "Albums",
+    "Genres & Moods",
+  ];
   /**
    * Handle category click
    */
@@ -160,8 +177,6 @@ const Search: React.FC = () => {
           onChange={(e) => setSearchQuery(e.target.value)}
           className="w-full bg-white text-black py-3 pl-10 pr-4 rounded-full font-medium focus:outline-none placeholder-zinc-500"
         />
-
-
       </div>
 
       {/* Search Results */}
@@ -190,16 +205,25 @@ const Search: React.FC = () => {
 
           {!isSearching && !searchError && searchResults.length === 0 && (
             <div className="text-center py-20">
-              <p className="text-zinc-400 text-lg">No results found for "{searchQuery}"</p>
-              <p className="text-zinc-500 text-sm mt-2">Try different keywords</p>
+              <p className="text-zinc-400 text-lg">
+                No results found for "{searchQuery}"
+              </p>
+              <p className="text-zinc-500 text-sm mt-2">
+                Try different keywords
+              </p>
             </div>
           )}
 
           {!isSearching && searchResults.length > 0 && (
             <div>
-              <div className="flex overflow-x-auto gap-2 pb-2 no-scrollbar"> {/* Parent container wraps the map */}
+              <div className="flex overflow-x-auto gap-2 pb-2 no-scrollbar">
+                {" "}
+                {/* Parent container wraps the map */}
                 {categories.map((c) => (
-                  <div key={c} className="flex-shrink-0 p-2 px-4 bg-zinc-900 rounded-2xl">
+                  <div
+                    key={c}
+                    className="flex-shrink-0 p-2 px-4 bg-zinc-900 rounded-2xl"
+                  >
                     <p className="text-sm font-medium text-white">{c}</p>
                   </div>
                 ))}
@@ -223,7 +247,11 @@ const Search: React.FC = () => {
                       />
                       <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-40 transition flex items-center justify-center">
                         <div className="opacity-0 group-hover:opacity-100 transition">
-                          <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
+                          <svg
+                            className="w-6 h-6 text-white"
+                            fill="currentColor"
+                            viewBox="0 0 24 24"
+                          >
                             <path d="M8 5v14l11-7z" />
                           </svg>
                         </div>
@@ -235,7 +263,9 @@ const Search: React.FC = () => {
                       onClick={() => handleTrackClick(track)}
                       className="min-w-0 flex-1 cursor-pointer"
                     >
-                      <h3 className={`truncate text-sm font-bold mb-0.5 ${track.id === 'currently-playing-id' ? 'text-blue-500 ' : 'text-white'}`}>
+                      <h3
+                        className={`truncate text-sm font-bold mb-0.5 ${track.id === "currently-playing-id" ? "text-blue-500 " : "text-white"}`}
+                      >
                         {track.title}
                       </h3>
                       <div className="flex items-center gap-1 text-xs text-zinc-400">
@@ -253,8 +283,11 @@ const Search: React.FC = () => {
 
                     {/* Actions - Far Right */}
                     <div
-                      className={`z-10 transition-opacity duration-200 ${isPlaylistModalOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'
-                        }`}
+                      className={`z-10 transition-opacity duration-200 ${
+                        isPlaylistModalOpen
+                          ? "opacity-0 pointer-events-none"
+                          : "opacity-100"
+                      }`}
                     >
                       <TrackOptionsMenu
                         track={track}

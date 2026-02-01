@@ -20,7 +20,6 @@ because in the listening history it cannot be recorded unless it's in the tracks
 
 feature to add
 
-add or delete playlist
 account sidebar functional
 mariz ai should be able to give music reccomendations that are clickable
 keep message history
@@ -28,11 +27,7 @@ be able to chat with friends and share music
 profile details like facebook
 
 and some ui fixes
-playlist track
-add to playlist ontoggle
 home page, add more music below (infinite scroll)
-liked songs
-search genre (pop, hip-hop, rock etc.)
 
 playlist image
 
@@ -40,10 +35,4 @@ public playlists
 
 multiple youtube api key and more daily quota
 
-home hover bug
-
 fetching efficiency (fetch once cache heavily)
-
-podcast
-
-home clickable playlist

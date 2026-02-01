@@ -13,68 +13,86 @@ class YouTubeService {
    * @param {number} maxResults - Maximum number of results (default: 10)
    * @returns {Promise<Array>} - Array of video results
    */
-  async searchMusic(query, maxResults = 10) {
-    try {
-      // Step 1: Search for videos
-      const searchResponse = await axios.get(`${YOUTUBE_API_BASE}/search`, {
-        params: {
-          part: 'snippet',
-          q: query,
-          type: 'video',
-          videoCategoryId: '10', // Music category
-          maxResults: maxResults * 2, // Get more to filter later
-          key: this.apiKey
-        }
-      });
+/**
+ * Search for music videos on YouTube
+ * @param {string} query - Search query (artist name, song, genre, podcast, etc.)
+ * @param {number} maxResults - Maximum number of results (default: 10)
+ * @returns {Promise<Array>} - Array of video results
+ */
+async searchMusic(query, maxResults = 10) {
+  try {
+    // Detect if query is a genre search
+    const genres = ['pop', 'hip-hop', 'hip hop', 'rock', 'jazz', 'classical', 'country', 
+                    'edm', 'electronic', 'r&b', 'rnb', 'reggae', 'metal', 'indie', 
+                    'alternative', 'folk', 'blues', 'soul', 'funk', 'rap'];
+    
+    const isGenreSearch = genres.some(genre => 
+      query.toLowerCase().includes(genre)
+    );
+    
+    // Enhance query for genre searches
+    const searchQuery = isGenreSearch ? `${query} music` : query;
+    
+    // Step 1: Search for videos
+    const searchResponse = await axios.get(`${YOUTUBE_API_BASE}/search`, {
+      params: {
+        part: 'snippet',
+        q: searchQuery,
+        type: 'video',
+        videoCategoryId: '10', // Music category
+        maxResults: maxResults * 2, // Get more to filter later
+        key: this.apiKey
+      }
+    });
 
-      const videoIds = searchResponse.data.items.map(item => item.id.videoId).join(',');
+    const videoIds = searchResponse.data.items.map(item => item.id.videoId).join(',');
 
-      // Step 2: Get video details (duration, etc.)
-      const detailsResponse = await axios.get(`${YOUTUBE_API_BASE}/videos`, {
-        params: {
-          part: 'contentDetails,snippet,statistics',
-          id: videoIds,
-          key: this.apiKey
-        }
-      });
+    // Step 2: Get video details (duration, etc.)
+    const detailsResponse = await axios.get(`${YOUTUBE_API_BASE}/videos`, {
+      params: {
+        part: 'contentDetails,snippet,statistics',
+        id: videoIds,
+        key: this.apiKey
+      }
+    });
 
-      // Step 3: Filter and format results
-      const filteredVideos = detailsResponse.data.items
-        .filter(video => this.isMusicVideo(video))
-        .slice(0, maxResults)
-        .map(video => this.formatVideoData(video));
+    // Step 3: Filter and format results
+    const filteredVideos = detailsResponse.data.items
+      .filter(video => this.isMusicVideo(video))
+      .slice(0, maxResults)
+      .map(video => this.formatVideoData(video));
 
-      return filteredVideos;
-    } catch (error) {
-      console.error('YouTube API Error:', error.response?.data || error.message);
-      throw new Error('Failed to search YouTube');
-    }
+    return filteredVideos;
+  } catch (error) {
+    console.error('YouTube API Error:', error.response?.data || error.message);
+    throw new Error('Failed to search YouTube');
   }
+}
 
-  /**
-   * Filter out non-music videos
-   * @param {Object} video - YouTube video object
-   * @returns {boolean}
-   */
-  isMusicVideo(video) {
-    const duration = this.parseDuration(video.contentDetails.duration);
-    const title = video.snippet.title.toLowerCase();
-    
-    // Filter criteria
-    const durationOk = duration >= 120 && duration <= 600; // 2-10 minutes
-    const hasMusicKeywords = 
-      title.includes('official') ||
-      title.includes('music') ||
-      title.includes('video') ||
-      title.includes('audio') ||
-      title.includes('lyric');
-    
-    // Exclude live streams, podcasts, etc.
-    const isNotLive = !title.includes('live stream') && !title.includes('podcast');
-    
-    return durationOk && hasMusicKeywords && isNotLive;
-  }
 
+/**
+ * Filter out non-music videos
+ * @param {Object} video - YouTube video object
+ * @returns {boolean}
+ */
+isMusicVideo(video) {
+  const duration = this.parseDuration(video.contentDetails.duration);
+  const title = video.snippet.title.toLowerCase();
+  
+  // Filter criteria
+  const durationOk = duration >= 120 && duration <= 600; // 2-10 minutes
+  const hasMusicKeywords = 
+    title.includes('official') ||
+    title.includes('music') ||
+    title.includes('video') ||
+    title.includes('audio') ||
+    title.includes('lyric');
+  
+  // Exclude live streams only
+  const isNotLive = !title.includes('live stream') && !title.includes('livestream');
+  
+  return durationOk && hasMusicKeywords && isNotLive;
+}
   /**
    * Parse ISO 8601 duration to seconds
    * @param {string} duration - ISO 8601 duration (e.g., "PT4M32S")

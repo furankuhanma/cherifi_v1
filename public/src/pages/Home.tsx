@@ -108,6 +108,40 @@ const HistoryCard: React.FC<HistoryCardProps> = ({
 
 const Home: React.FC = () => {
   const navigate = useNavigate();
+
+  const allCategories = [
+    "Pop",
+    "Hip-Hop",
+    "Rock",
+    "Jazz",
+    "Classical",
+    "Country",
+    "Edm",
+    "Electronic",
+    "R&B",
+    "Rnb",
+    "Reggae",
+    "Metal",
+    "Indie",
+    "Alternative",
+    "Folk",
+    "Blues",
+    "Soul",
+    "Funk",
+    "Rap",
+  ];
+  const [visibleCategories, setVisibleCategories] = useState<string[]>([]);
+
+  useEffect(() => {
+    const pick = () =>
+      setVisibleCategories(
+        [...allCategories].sort(() => 0.5 - Math.random()).slice(0, 5),
+      );
+    pick();
+    const interval = setInterval(pick, 3600000);
+    return () => clearInterval(interval);
+  }, []);
+
   const hour = new Date().getHours();
   const greeting =
     hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
@@ -240,15 +274,6 @@ const Home: React.FC = () => {
     }
   };
 
-  const categories = ["All", "Music", "Podcasts"];
-  const blueShades = [
-    "bg-blue-700",
-    "bg-blue-600",
-    "bg-blue-500",
-    "bg-blue-700",
-    "bg-blue-800",
-    "bg-blue-900",
-  ];
   return (
     <div className="space-y-10 animate-in fade-in duration-500">
       {/* 1. Greeting & Quick Grid */}
@@ -256,14 +281,23 @@ const Home: React.FC = () => {
         <div className="flex overflow-x-auto gap-2 pb-2 no-scrollbar">
           {" "}
           {/* Parent container wraps the map */}
-          {categories.map((c, index) => (
-            <div
-              key={c}
-              className={`flex-shrink-0 p-2 px-4 rounded-2xl ${blueShades[index % blueShades.length]}`}
-            >
-              <p className="text-sm font-medium text-white">{c}</p>
-            </div>
-          ))}
+          {["All", ...visibleCategories].map((c, index) => {
+            const isAll = c === "All";
+
+            return (
+              <button
+                key={c}
+                className={`flex-shrink-0 p-2 px-4 rounded-2xl transition-all duration-300 bg-blue-600 hover:scale-105 active:scale-95 ${c === "All" ? "opacity-70 cursor-default" : "cursor-pointer"}`}
+                onClick={() => {
+                  if (!isAll) {
+                    navigate(`/search?q=${encodeURIComponent(c)}`);
+                  }
+                }}
+              >
+                <p className="text-sm font-medium text-white">{c}</p>
+              </button>
+            );
+          })}
         </div>
 
         {/*Make some playlist recommendations for this section */}
