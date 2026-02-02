@@ -290,7 +290,7 @@ const Home: React.FC = () => {
   };
 
   return (
-    <div className="space-y-10 animate-in fade-in duration-500">
+    <div className="space-y-1 animate-in fade-in duration-500">
       {/* 1. Greeting & Quick Grid */}
       <header>
         <div className="flex overflow-x-auto gap-2 pb-2 no-scrollbar">
@@ -356,7 +356,7 @@ const Home: React.FC = () => {
       {/* --- Recently Played Section --- */}
       {historyTracks.length > 0 && (
         <section>
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between mt-8 mb-4">
             <h2 className="text-xl md:text-2xl font-bold tracking-tight">
               Recently Played
             </h2>

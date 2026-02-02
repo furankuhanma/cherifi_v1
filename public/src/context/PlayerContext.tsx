@@ -15,6 +15,7 @@ interface PlayerContextType {
   isPlaying: boolean;
   progress: number;
   volume: number;
+  isGlobalMenuOpen: (open: boolean) => void;
   playTrack: (track: Track) => void;
   togglePlay: () => void;
   nextTrack: () => void;
@@ -42,6 +43,7 @@ const PlayerContext = createContext<PlayerContextType | undefined>(undefined);
 export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
+  const [isGlobalMenuOpen, setIsGlobalMenuOpen] = useState(false);
   const [toast, setToast] = useState<Toast>({ message: "", visible: false });
   const [playbackMode, setPlaybackMode] = useState<PlaybackMode>("normal");
   const [aiQueue, setAiQueue] = useState<Track[]>([]);
@@ -513,7 +515,9 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({
         playbackMode,
         toggleShuffle,
         toggleRepeat,
-        refreshSmartShuffle, // ✅ ADDED
+        refreshSmartShuffle,
+        isGlobalMenuOpen,
+        setIsGlobalMenuOpen,
       }}
     >
       {children}

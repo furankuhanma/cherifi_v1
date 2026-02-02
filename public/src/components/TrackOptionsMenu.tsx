@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { MoreVertical, Plus, Heart, Download, Music2, X } from "lucide-react";
 import { Track } from "../types/types";
 import { motion, AnimatePresence } from "framer-motion";
+import { usePlayer } from "../context/PlayerContext";
 
 interface TrackOptionsMenuProps {
   track: Track;
@@ -23,20 +24,13 @@ const TrackOptionsMenu: React.FC<TrackOptionsMenuProps> = ({
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const { setIsGlobalMenuOpen } = usePlayer();
 
-  // Inside TrackOptionsMenu component
   useEffect(() => {
-    if (isOpen) {
-      // Add a class to body when menu is open
-      document.body.classList.add("menu-open");
-    } else {
-      document.body.classList.remove("menu-open");
-    }
-
-    return () => {
-      document.body.classList.remove("menu-open");
-    };
-  }, [isOpen]);
+    setIsGlobalMenuOpen(isOpen);
+    // Cleanup on unmount
+    return () => setIsGlobalMenuOpen(false);
+  }, [isOpen, setIsGlobalMenuOpen]);
   // Close menu when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {

@@ -25,6 +25,7 @@ const Player = () => {
     toggleShuffle,
     toggleRepeat,
     menuOpen,
+    isGlobalMenuOpen,
   } = usePlayer();
   const [isExpanded, setIsExpanded] = useState(false);
   const isMenuOpen =
@@ -47,9 +48,9 @@ const Player = () => {
   if (isExpanded) {
     return (
       <div
-        className={`fixed bottom-[64px] md:bottom-0 left-0 right-0 bg-blue-900 md:bg-zinc-900 border-t border-zinc-800 px-4 py-2 md:h-24 flex items-center justify-between z-40 transition-transform duration-300 ${
-          isMenuOpen
-            ? "translate-y-[200%] opacity-0"
+        className={`fixed bottom-[64px] md:bottom-0 left-0 right-0 ... transition-all duration-300 ${
+          isGlobalMenuOpen // Now it reacts instantly!
+            ? "translate-y-full opacity-0 pointer-events-none"
             : "translate-y-0 opacity-100"
         }`}
       >
