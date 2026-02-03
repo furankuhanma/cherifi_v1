@@ -1,7 +1,14 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
-import { Track } from '../types/types';
-import { useAuth } from './AuthContext';
-import { trackAPI } from '../services/api'; 
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  ReactNode,
+  useCallback,
+} from "react";
+import { Track } from "../types/types";
+import { useAuth } from "./AuthContext";
+import { cachedTrackAPI as trackAPI } from "../services/cachedAPI";
 
 interface LikeContextType {
   likedTracks: Track[];
@@ -14,24 +21,26 @@ interface LikeContextType {
 
 const LikeContext = createContext<LikeContextType | undefined>(undefined);
 
-export const LikeProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+export const LikeProvider: React.FC<{ children: ReactNode }> = ({
+  children,
+}) => {
   const [likedTracks, setLikedTracks] = useState<Track[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const { user } = useAuth();
 
-const fetchLikedTracks = useCallback(async () => {
-  if (!user) return;
-  setIsLoading(true);
-  try {
-    const tracks = await trackAPI.getLikedTracks();
-    console.log('🎵 Setting Liked Tracks state:', tracks); // Add this log
-    setLikedTracks(tracks);
-  } catch (error) {
-    console.error('❌ Failed to fetch likes:', error);
-  } finally {
-    setIsLoading(false);
-  }
-}, [user]);
+  const fetchLikedTracks = useCallback(async () => {
+    if (!user) return;
+    setIsLoading(true);
+    try {
+      const tracks = await trackAPI.getLikedTracks();
+      console.log("🎵 Setting Liked Tracks state:", tracks); // Add this log
+      setLikedTracks(tracks);
+    } catch (error) {
+      console.error("❌ Failed to fetch likes:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [user]);
 
   useEffect(() => {
     if (user) {
@@ -42,15 +51,15 @@ const fetchLikedTracks = useCallback(async () => {
   }, [user, fetchLikedTracks]);
 
   const isLiked = (trackId: string): boolean => {
-    return likedTracks.some(track => track.id === trackId);
+    return likedTracks.some((track) => track.id === trackId);
   };
 
   const toggleLike = async (track: Track) => {
     const wasLiked = isLiked(track.id);
-    
+
     // Optimistic UI Update
-    setLikedTracks(prev => 
-      wasLiked ? prev.filter(t => t.id !== track.id) : [track, ...prev]
+    setLikedTracks((prev) =>
+      wasLiked ? prev.filter((t) => t.id !== track.id) : [track, ...prev],
     );
 
     try {
@@ -60,7 +69,7 @@ const fetchLikedTracks = useCallback(async () => {
         await trackAPI.likeTrack(track);
       }
     } catch (error) {
-      console.error('❌ Database sync failed, rolling back:', error);
+      console.error("❌ Database sync failed, rolling back:", error);
       fetchLikedTracks(); // Rollback to server state
     }
   };
@@ -83,6 +92,6 @@ const fetchLikedTracks = useCallback(async () => {
 
 export const useLikes = () => {
   const context = useContext(LikeContext);
-  if (!context) throw new Error('useLikes must be used within LikeProvider');
+  if (!context) throw new Error("useLikes must be used within LikeProvider");
   return context;
 };

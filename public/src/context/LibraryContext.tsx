@@ -6,7 +6,7 @@ import React, {
   useEffect,
 } from "react";
 import { Playlist } from "../types/types";
-import { playlistAPI } from "../services/api";
+import { cachedPlaylistAPI as playlistAPI } from "../services/cachedAPI";
 
 interface LibraryContextType {
   playlists: Playlist[];

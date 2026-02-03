@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Search as SearchIcon } from "lucide-react";
 import { CATEGORIES } from "../constants";
 import { Track } from "../types/types";
-import { searchAPI } from "../services/api";
+import { cachedSearchAPI as searchAPI } from "../services/cachedAPI";
 import { usePlayer } from "../context/PlayerContext";
 import { useLikes } from "../context/LikeContext";
 import { useDownloads } from "../context/DownloadContext";

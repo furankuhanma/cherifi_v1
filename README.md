@@ -32,5 +32,3 @@ priority:
 account sidebar functional
 
 multiple youtube api key and more daily quota
-
-fetching efficiency (fetch once cache heavily)

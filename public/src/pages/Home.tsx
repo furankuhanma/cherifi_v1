@@ -6,7 +6,11 @@ import { usePlayer } from "../context/PlayerContext";
 import { useLibrary } from "../context/LibraryContext";
 import { useLikes } from "../context/LikeContext";
 import { useDownloads } from "../context/DownloadContext";
-import { searchAPI, trackAPI, historyAPI } from "../services/api";
+import {
+  cachedSearchAPI as searchAPI,
+  cachedTrackAPI as trackAPI,
+  cachedHistoryAPI as historyAPI,
+} from "../services/cachedAPI";
 import TrackOptionsMenu from "../components/TrackOptionsMenu";
 import AddToPlaylistModal from "../components/AddToPlayListModal";
 import { WifiOff } from "lucide-react";

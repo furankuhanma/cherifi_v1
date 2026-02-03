@@ -15,7 +15,7 @@ import { usePlayer } from "../context/PlayerContext";
 import { useLibrary } from "../context/LibraryContext";
 import { useLikes } from "../context/LikeContext";
 import { useDownloads } from "../context/DownloadContext";
-import { playlistAPI } from "../services/api";
+import { cachedPlaylistAPI as playlistAPI } from "../services/cachedAPI";
 import { Playlist, Track } from "../types/types";
 import TrackOptionsMenu from "../components/TrackOptionsMenu";
 import AddToPlaylistModal from "../components/AddToPlayListModal";

@@ -39,12 +39,8 @@ const OfflineLibrary: React.FC = () => {
     loadStorageInfo();
   }, [downloadedTracks]);
 
-  // --- In OfflineLibrary.tsx, update the loadStorageInfo function ---
-
   const loadStorageInfo = async () => {
-    // Only show the big loading spinner if we have no tracks cached in state yet
     if (downloadedTracks.length === 0) setLoading(true);
-
     try {
       const info = await getStorageUsage();
       setStorageInfo(info);
@@ -53,7 +49,6 @@ const OfflineLibrary: React.FC = () => {
     }
   };
 
-  // --- Update the handlePlayTrack to find by videoId or id ---
   const handlePlayTrack = (trackId: string) => {
     const dtTrack = downloadedTracks.find(
       (dt) => dt.track.id === trackId || dt.track.videoId === trackId,
@@ -64,13 +59,14 @@ const OfflineLibrary: React.FC = () => {
       playTrack(dtTrack.track);
     }
   };
-  // Remove download with confirmation
+
   const handleRemoveDownload = (trackId: string) => {
     const track = downloadedTracks.find((dt) => dt.track.id === trackId)?.track;
     if (track) {
       setTrackToDelete({ id: trackId, title: track.title });
     }
   };
+
   const confirmDeleteAction = async () => {
     if (trackToDelete) {
       await removeDownload(trackToDelete.id);
@@ -78,24 +74,12 @@ const OfflineLibrary: React.FC = () => {
     }
   };
 
-  {
-    /*
-  // Clear all downloads
-  const handleClearAll = async () => {
-    await clearDownloads();
-    setShowClearDialog(false);
-  }; 
-  */
-  }
-
-  // Format file size
   const formatSize = (bytes: number): string => {
     if (bytes === 0) return "0 MB";
     const mb = bytes / 1024 / 1024;
     return mb >= 1 ? `${mb.toFixed(1)} MB` : `${(bytes / 1024).toFixed(0)} KB`;
   };
 
-  // Format date
   const formatDate = (dateString: string): string => {
     const date = new Date(dateString);
     const now = new Date();
@@ -110,7 +94,6 @@ const OfflineLibrary: React.FC = () => {
     return date.toLocaleDateString();
   };
 
-  // Empty state
   if (!loading && downloadedTracks.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] px-4">
@@ -135,7 +118,6 @@ const OfflineLibrary: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto">
-      {/* Header Section */}
       <div className="mb-8">
         <div className="flex items-center gap-3 mb-2">
           <div className="ml-2 bg-blue-500 p-3 rounded-lg mr-4">
@@ -147,7 +129,6 @@ const OfflineLibrary: React.FC = () => {
           </div>
         </div>
 
-        {/* Storage Info Bar */}
         <div className="mt-6 bg-gray-800/50 rounded-lg p-4">
           <div className="flex items-center justify-between flex-wrap gap-4">
             <div className="flex items-center gap-6">
@@ -164,20 +145,8 @@ const OfflineLibrary: React.FC = () => {
                 </span>
               </div>
             </div>
-
-            {/*
-            downloadedTracks.length > 0 && (
-              <button
-                onClick={() => setShowClearDialog(true)}
-                className="px-4 py-2 bg-red-600/20 text-red-400 rounded-lg hover:bg-red-600/30 transition-colors text-sm font-medium"
-              >
-                Clear All Downloads
-              </button>
-            )
-            */}
           </div>
 
-          {/* Storage Progress Bar */}
           {storageInfo.totalSizeMB > 0 && (
             <div className="mt-4">
               <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
@@ -197,16 +166,14 @@ const OfflineLibrary: React.FC = () => {
         </div>
       </div>
 
-      {/* Loading State */}
       {loading && (
         <div className="flex justify-center items-center py-12">
           <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-100 border-t-[#1D4ED8]"></div>
         </div>
       )}
 
-      {/* Tracks Grid */}
       {!loading && (
-        <div>
+        <div className="space-y-1">
           {downloadedTracks.map((downloadedTrack) => {
             const track = downloadedTrack.track;
             const isCurrentTrack = currentTrack?.id === track.id;
@@ -215,30 +182,31 @@ const OfflineLibrary: React.FC = () => {
             return (
               <div
                 key={track.id}
-                className="group relative z-0 flex items-center gap-4 rounded-lg p-2 transition hover:bg-zinc-800/50 hover:z-50"
+                onClick={() => handlePlayTrack(track.id)}
+                /* Dynamic Z-Index: If this menu is open, this row sits on top of all other rows */
+                style={{ zIndex: openMenuId === track.id ? 50 : 0 }}
+                className="group relative flex items-center gap-4 rounded-lg p-2 transition hover:bg-zinc-800/50 cursor-pointer"
               >
-                {/* 1. Fixed Image Size (Left) */}
+                {/* 1. Image Container */}
                 <div className="relative h-12 w-12 flex-shrink-0">
                   <img
                     src={track.coverUrl || "/placeholder-album.png"}
                     alt={track.title}
                     className="h-full w-full aspect-square object-cover rounded-md shadow-md"
                   />
-
-                  {/* Play Button Overlay - Simplified for small size */}
-                  <button
-                    onClick={() => handlePlayTrack(track.id)}
+                  {/* Play Overlay */}
+                  <div
                     className={`absolute inset-0 flex items-center justify-center rounded-md bg-black/40 transition-opacity ${
                       isTrackPlaying
                         ? "opacity-100"
                         : "opacity-0 group-hover:opacity-100"
                     }`}
                   >
-                    <Play size={16} className="text-white fill-white" />
-                  </button>
+                    <Play size={16} className="text-white fill-current" />
+                  </div>
                 </div>
 
-                {/* 2. Track Info (Center - Grows to fill space) */}
+                {/* 2. Track Info */}
                 <div className="flex-1 min-w-0">
                   <h3
                     className={`text-sm font-semibold truncate ${isCurrentTrack ? "text-blue-400" : "text-white"}`}
@@ -250,19 +218,21 @@ const OfflineLibrary: React.FC = () => {
                   </div>
                 </div>
 
-                {/* 3. Actions (Right - Stay on the end) */}
+                {/* 3. Actions */}
                 <div className="flex items-center gap-2">
-                  {/* Date Hidden on Mobile to save space, visible on MD+ */}
                   <span className="hidden md:block text-[10px] text-zinc-500 mr-2">
                     {formatDate(downloadedTrack.downloadedAt)}
                   </span>
 
                   <div className="relative">
                     <button
-                      onClick={() =>
-                        setOpenMenuId(openMenuId === track.id ? null : track.id)
-                      }
-                      className="p-1 hover:bg-zinc-700 rounded transition-colors"
+                      onClick={(e) => {
+                        e.stopPropagation(); // Prevents track from playing when opening menu
+                        setOpenMenuId(
+                          openMenuId === track.id ? null : track.id,
+                        );
+                      }}
+                      className="p-1 hover:bg-zinc-700 rounded transition-colors relative z-20"
                     >
                       <MoreVertical size={18} className="text-zinc-500" />
                     </button>
@@ -271,15 +241,23 @@ const OfflineLibrary: React.FC = () => {
                       <>
                         <div
                           className="fixed inset-0 z-10"
-                          onClick={() => setOpenMenuId(null)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setOpenMenuId(null);
+                          }}
                         />
-                        <div className="absolute right-0 top-full mt-2 z-20 bg-zinc-900 rounded-lg shadow-2xl border border-zinc-800 py-1 min-w-[160px]">
+                        <div
+                          className="absolute right-0 top-full mt-2 z-[100] bg-zinc-900 rounded-lg shadow-[0_10px_38px_rgba(0,0,0,0.5)] border border-zinc-800 py-1 min-w-[160px] overflow-hidden"
+                          onClick={(e) => e.stopPropagation()}
+                        >
                           <button
-                            onClick={() => {
+                            onClick={(e) => {
+                              e.stopPropagation();
                               handleRemoveDownload(track.id);
                               setOpenMenuId(null);
                             }}
-                            className="w-full px-4 py-2 text-left text-sm text-red-400 hover:bg-zinc-800 flex items-center gap-2"
+                            // Added 'relative' and 'z-[101]' just to be safe, though the parent z-[100] usually suffices
+                            className="w-full px-4 py-2 text-left text-sm text-red-400 hover:bg-zinc-800 flex items-center gap-2 transition-colors relative z-[101]"
                           >
                             <Trash2 size={14} />
                             Remove Download
@@ -295,39 +273,12 @@ const OfflineLibrary: React.FC = () => {
         </div>
       )}
 
-      {/* 
-      {showClearDialog && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-          <div className="bg-gray-900 rounded-lg p-6 max-w-md w-full border border-gray-700">
-            <h3 className="text-xl font-bold text-white mb-2">Clear All Downloads?</h3>
-            <p className="text-gray-400 mb-4">
-              This will remove all {downloadedTracks.length} offline tracks and free up{' '}
-              {storageInfo.totalSizeMB.toFixed(1)} MB of storage. This action cannot be undone.
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowClearDialog(false)}
-                className="flex-1 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleClearAll}
-                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-semibold"
-              >
-                Delete All
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-        */}
       <ConfirmDeleteModal
         isOpen={!!trackToDelete}
         onClose={() => setTrackToDelete(null)}
         onConfirm={confirmDeleteAction}
         title="Remove Download?"
-        message={`"${trackToDelete?.title}" will be removed from your device. You'll need an internet connection to listen to it again.`}
+        message={`"${trackToDelete?.title}" will be removed from your device.`}
       />
     </div>
   );

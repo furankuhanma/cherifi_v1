@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { X, Plus, Music, Check, Loader, Minus } from "lucide-react";
 import { Track } from "../types/types";
 import { useLibrary } from "../context/LibraryContext";
-import { playlistAPI } from "../services/api";
+import { cachedPlaylistAPI as playlistAPI } from "../services/cachedAPI";
 
 interface AddToPlaylistModalProps {
   isOpen: boolean;
