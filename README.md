@@ -20,17 +20,16 @@ because in the listening history it cannot be recorded unless it's in the tracks
 
 feature to add
 
-account sidebar functional
 mariz ai should be able to give music reccomendations that are clickable
 keep message history
 be able to chat with friends and share music
 profile details like facebook
 
-home page, add more music below (infinite scroll)
-
-playlist image
-
 public playlists
+
+priority:
+
+account sidebar functional
 
 multiple youtube api key and more daily quota
 

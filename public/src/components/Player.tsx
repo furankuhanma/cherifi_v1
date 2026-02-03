@@ -47,24 +47,21 @@ const Player = () => {
 
   if (isExpanded) {
     return (
-      <div
-        className={`fixed bottom-[64px] md:bottom-0 left-0 right-0 ... transition-all duration-300 ${
-          isGlobalMenuOpen // Now it reacts instantly!
-            ? "translate-y-full opacity-0 pointer-events-none"
-            : "translate-y-0 opacity-100"
-        }`}
-      >
+      <div className="fixed inset-0 bg-gradient-to-b from-zinc-900 to-black z-[60] flex flex-col items-center justify-start px-6 pt-8 pb-32 overflow-y-auto">
         <button
           onClick={() => setIsExpanded(false)}
-          className="self-start mb-12 text-zinc-400"
+          className="self-start mb-8 text-zinc-400 hover:text-white transition"
         >
           <ChevronDown size={32} />
         </button>
+
         <img
           src={currentTrack.coverUrl}
-          className="w-full max-w-[320px] aspect-square rounded-lg shadow-2xl mb-12"
+          alt={currentTrack.title}
+          className="w-full max-w-[320px] aspect-square rounded-lg shadow-2xl mb-8"
         />
-        <div className="w-full max-w-[320px] text-left mb-8">
+
+        <div className="w-full max-w-[320px] text-center mb-8">
           <h2 className="text-2xl font-bold truncate">{currentTrack.title}</h2>
           <p className="text-zinc-400 text-lg">{currentTrack.artist}</p>
         </div>
@@ -84,7 +81,7 @@ const Player = () => {
         </div>
 
         {/* Controls */}
-        <div className="flex items-center gap-8 mb-12">
+        <div className="flex items-center justify-center gap-8 w-full max-w-[320px]">
           <button onClick={toggleShuffle} className="relative">
             <Shuffle
               size={24}
@@ -96,10 +93,12 @@ const Player = () => {
               </span>
             )}
           </button>
-          <SkipBack size={32} className="fill-white" onClick={prevTrack} />
+          <button onClick={prevTrack}>
+            <SkipBack size={32} className="fill-white text-white" />
+          </button>
           <button
             onClick={togglePlay}
-            className="w-20 h-20 bg-white rounded-full flex items-center justify-center text-black"
+            className="w-20 h-20 bg-white rounded-full flex items-center justify-center text-black hover:scale-105 transition"
           >
             {isPlaying ? (
               <Pause size={40} className="fill-current" />
@@ -107,7 +106,9 @@ const Player = () => {
               <Play size={40} className="ml-1 fill-current" />
             )}
           </button>
-          <SkipForward size={32} className="fill-white" onClick={nextTrack} />
+          <button onClick={nextTrack}>
+            <SkipForward size={32} className="fill-white text-white" />
+          </button>
           <button
             onClick={toggleRepeat}
             className="relative group flex items-center justify-center"

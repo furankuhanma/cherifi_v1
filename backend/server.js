@@ -88,14 +88,38 @@ app.use((req, res, next) => {
 });
 
 // ============================================
+// STATIC FILE SERVING
+// ============================================
+
+// Serve audio files
+const audioDir = process.env.AUDIO_STORAGE_DIR || '/home/frank-loui-lapore/vibestream/audio';
+app.use('/audio', express.static(audioDir));
+
+// Serve playlist cover images with aggressive caching
+const playlistImagesDir = '/home/frank-loui-lapore/vibestream/playlist_IMG';
+app.use('/playlist-images', express.static(playlistImagesDir, {
+  maxAge: '365d', // Cache for 1 year
+  immutable: true, // Tell browsers the file will never change
+  etag: true, // Enable ETag for conditional requests
+  lastModified: true, // Enable Last-Modified header
+  setHeaders: (res, path) => {
+    // Aggressive caching headers for images
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    res.setHeader('Expires', new Date(Date.now() + 31536000000).toUTCString());
+    
+    // Security headers for images
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline';");
+    
+    console.log(`📸 Serving playlist image: ${path}`);
+  }
+}));
+
+// ============================================
 // ROUTES
 // ============================================
 
 app.use('/api/tracks', trackRoutes);
-
-// Serve static audio files from storage directory
-const audioDir = process.env.AUDIO_STORAGE_DIR || '/home/frank-loui-lapore/vibestream/audio';
-app.use('/audio', express.static(audioDir));
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -180,7 +204,9 @@ app.use((req, res) => {
       'POST /api/ai/recommend',
       'GET /api/playlists',
       'POST /api/playlists',
-      'GET /api/playlists/:id'
+      'GET /api/playlists/:id',
+      'POST /api/playlists/:id/cover',
+      'DELETE /api/playlists/:id/cover'
     ]
   });
 });
@@ -314,6 +340,10 @@ async function startServer() {
       console.log('  📋 Playlists:');
       console.log('    - GET  /api/playlists');
       console.log('    - POST /api/playlists');
+      console.log('    - POST /api/playlists/:id/cover (📸 NEW)');
+      console.log('    - DELETE /api/playlists/:id/cover (📸 NEW)');
+      console.log('  🖼️  Static Files:');
+      console.log('    - GET  /playlist-images/:filename (📸 NEW)');
       console.log('=====================================\n');
     });
 

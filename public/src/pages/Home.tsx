@@ -11,6 +11,7 @@ import TrackOptionsMenu from "../components/TrackOptionsMenu";
 import AddToPlaylistModal from "../components/AddToPlayListModal";
 import { WifiOff } from "lucide-react";
 import useInfiniteScroll from "../hooks/useInfiniteScroll";
+import { getPlaylistCoverUrl } from "../utils/imageUtils";
 
 interface PlaylistCardProps {
   playlist: Playlist;
@@ -25,7 +26,12 @@ const PlaylistCard: React.FC<PlaylistCardProps> = ({ playlist }) => {
     >
       <div className="relative mb-4 aspect-square shadow-lg overflow-hidden rounded-md">
         <img
-          src={playlist.coverUrl}
+          src={getPlaylistCoverUrl(playlist.coverUrl)}
+          onError={(e) => {
+            // Fallback to placeholder if image fails to load
+            (e.target as HTMLImageElement).src =
+              "https://picsum.photos/600/600";
+          }}
           alt={playlist.name}
           className="object-cover w-full h-full"
         />
@@ -338,8 +344,13 @@ const Home: React.FC = () => {
                 onClick={() => navigate(`/playlist/${playlist.id}`)}
               >
                 <img
-                  src={playlist.coverUrl}
-                  alt=""
+                  src={getPlaylistCoverUrl(playlist.coverUrl)}
+                  alt={playlist.name}
+                  onError={(e) => {
+                    // Fallback to placeholder if image fails to load
+                    (e.target as HTMLImageElement).src =
+                      "https://picsum.photos/600/600";
+                  }}
                   className="w-14 md:w-20 h-full object-cover shadow-2xl"
                 />
                 <span className="font-bold text-xs md:text-base pr-4 line-clamp-1">

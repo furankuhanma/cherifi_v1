@@ -1,31 +1,40 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
   X,
-  Music,
   Camera,
   Upload,
   Image as ImageIcon,
   Loader2,
+  Pencil,
 } from "lucide-react";
-import { useLibrary } from "../context/LibraryContext";
+import { getPlaylistCoverUrl } from "../utils/imageUtils";
 
-interface CreateModalProps {
+interface EditPlaylistModalProps {
   isOpen: boolean;
   onClose: () => void;
+  playlist: {
+    id: string;
+    name: string;
+    coverUrl: string;
+    description?: string;
+  } | null;
+  onUpdate: () => void;
 }
 
-const CreateModal: React.FC<CreateModalProps> = ({ isOpen, onClose }) => {
+const EditPlaylistModal: React.FC<EditPlaylistModalProps> = ({
+  isOpen,
+  onClose,
+  playlist,
+  onUpdate,
+}) => {
   const [playlistName, setPlaylistName] = useState("");
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
-  const [showImageOptions, setShowImageOptions] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
-
-  const { addPlaylist } = useLibrary();
 
   // Prevent background scroll when modal is open
   useEffect(() => {
@@ -36,13 +45,19 @@ const CreateModal: React.FC<CreateModalProps> = ({ isOpen, onClose }) => {
     }
   }, [isOpen]);
 
+  // Set initial values when playlist changes
+  useEffect(() => {
+    if (playlist) {
+      setPlaylistName(playlist.name);
+      setImagePreview(getPlaylistCoverUrl(playlist.coverUrl));
+      setSelectedImage(null);
+    }
+  }, [playlist]);
+
   // Reset state when modal closes
   useEffect(() => {
     if (!isOpen) {
-      setPlaylistName("");
       setSelectedImage(null);
-      setImagePreview(null);
-      setShowImageOptions(false);
       setError(null);
     }
   }, [isOpen]);
@@ -73,8 +88,6 @@ const CreateModal: React.FC<CreateModalProps> = ({ isOpen, onClose }) => {
       setImagePreview(reader.result as string);
     };
     reader.readAsDataURL(file);
-
-    setShowImageOptions(false);
   };
 
   // Open file picker
@@ -87,10 +100,10 @@ const CreateModal: React.FC<CreateModalProps> = ({ isOpen, onClose }) => {
     cameraInputRef.current?.click();
   };
 
-  // Remove selected image
+  // Remove selected image (revert to original)
   const handleRemoveImage = () => {
     setSelectedImage(null);
-    setImagePreview(null);
+    setImagePreview(playlist ? getPlaylistCoverUrl(playlist.coverUrl) : null);
     if (fileInputRef.current) fileInputRef.current.value = "";
     if (cameraInputRef.current) cameraInputRef.current.value = "";
   };
@@ -130,10 +143,36 @@ const CreateModal: React.FC<CreateModalProps> = ({ isOpen, onClose }) => {
     }
   };
 
-  const handleCreate = async (e: React.FormEvent) => {
+  // Update playlist name
+  const updatePlaylistName = async (playlistId: string, name: string) => {
+    try {
+      const token = localStorage.getItem("auth_token");
+      const BASE_URL = import.meta.env.VITE_BACKEND_URL;
+
+      const response = await fetch(`${BASE_URL}/api/playlists/${playlistId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: token ? `Bearer ${token}` : "",
+        },
+        body: JSON.stringify({ name }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to update playlist name");
+      }
+
+      console.log("✅ Playlist name updated");
+    } catch (error) {
+      console.error("❌ Error updating playlist name:", error);
+      throw error;
+    }
+  };
+
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!playlistName.trim()) {
+    if (!playlist || !playlistName.trim()) {
       setError("Please enter a playlist name");
       return;
     }
@@ -142,28 +181,28 @@ const CreateModal: React.FC<CreateModalProps> = ({ isOpen, onClose }) => {
     setError(null);
 
     try {
-      // Create playlist first with default cover
-      const playlist = await addPlaylist(playlistName, "default");
+      // Update playlist name if changed
+      if (playlistName !== playlist.name) {
+        await updatePlaylistName(playlist.id, playlistName);
+      }
 
-      // If image is selected, upload it
-      if (selectedImage && playlist) {
+      // Upload new image if selected
+      if (selectedImage) {
         await uploadImage(playlist.id);
       }
 
-      // Reset and close
-      setPlaylistName("");
-      setSelectedImage(null);
-      setImagePreview(null);
+      // Trigger refresh in parent component
+      onUpdate();
       onClose();
     } catch (error) {
-      console.error("Error creating playlist:", error);
-      setError("Failed to create playlist. Please try again.");
+      console.error("Error updating playlist:", error);
+      setError("Failed to update playlist. Please try again.");
     } finally {
       setIsUploading(false);
     }
   };
 
-  if (!isOpen) return null;
+  if (!isOpen || !playlist) return null;
 
   return (
     <div className="fixed inset-0 z-[100] flex items-end md:items-center justify-center">
@@ -176,7 +215,7 @@ const CreateModal: React.FC<CreateModalProps> = ({ isOpen, onClose }) => {
       {/* Content */}
       <div className="relative w-full max-w-lg bg-zinc-900 border-t md:border border-zinc-800 rounded-t-2xl md:rounded-2xl p-6 md:p-8 animate-in slide-in-from-bottom duration-300">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-bold">Create Playlist</h2>
+          <h2 className="text-xl font-bold">Edit Playlist</h2>
           <button
             onClick={onClose}
             className="p-2 hover:bg-zinc-800 rounded-full transition"
@@ -186,10 +225,10 @@ const CreateModal: React.FC<CreateModalProps> = ({ isOpen, onClose }) => {
           </button>
         </div>
 
-        <form onSubmit={handleCreate} className="space-y-6">
+        <form onSubmit={handleSave} className="space-y-6">
           {/* Cover Image Section */}
           <div className="flex flex-col items-center gap-4">
-            {/* Image Preview or Placeholder */}
+            {/* Image Preview */}
             <div className="relative w-48 h-48 bg-zinc-800 rounded-lg overflow-hidden group">
               {imagePreview ? (
                 <>
@@ -197,14 +236,25 @@ const CreateModal: React.FC<CreateModalProps> = ({ isOpen, onClose }) => {
                     src={imagePreview}
                     alt="Playlist cover preview"
                     className="w-full h-full object-cover"
+                    onError={(e) => {
+                      // Fallback to placeholder if image fails to load
+                      (e.target as HTMLImageElement).src =
+                        "https://picsum.photos/600/600";
+                    }}
                   />
-                  <button
-                    type="button"
-                    onClick={handleRemoveImage}
-                    className="absolute top-2 right-2 bg-red-500 text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition"
-                  >
-                    <X size={16} />
-                  </button>
+                  {/* Edit overlay */}
+                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
+                    <Pencil size={32} className="text-white" />
+                  </div>
+                  {selectedImage && (
+                    <button
+                      type="button"
+                      onClick={handleRemoveImage}
+                      className="absolute top-2 right-2 bg-red-500 text-white p-2 rounded-full"
+                    >
+                      <X size={16} />
+                    </button>
+                  )}
                 </>
               ) : (
                 <div className="w-full h-full flex items-center justify-center">
@@ -214,26 +264,26 @@ const CreateModal: React.FC<CreateModalProps> = ({ isOpen, onClose }) => {
             </div>
 
             {/* Image Upload Buttons */}
-            {!imagePreview && (
-              <div className="flex gap-3">
-                <button
-                  type="button"
-                  onClick={handleCamera}
-                  className="flex items-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-full transition text-sm font-medium"
-                >
-                  <Camera size={18} />
-                  Camera
-                </button>
-                <button
-                  type="button"
-                  onClick={handleFilePicker}
-                  className="flex items-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-full transition text-sm font-medium"
-                >
-                  <Upload size={18} />
-                  Upload
-                </button>
-              </div>
-            )}
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={handleCamera}
+                className="flex items-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-full transition text-sm font-medium"
+                disabled={isUploading}
+              >
+                <Camera size={18} />
+                Camera
+              </button>
+              <button
+                type="button"
+                onClick={handleFilePicker}
+                className="flex items-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-full transition text-sm font-medium"
+                disabled={isUploading}
+              >
+                <Upload size={18} />
+                Change
+              </button>
+            </div>
 
             {/* Hidden file inputs */}
             <input
@@ -262,23 +312,14 @@ const CreateModal: React.FC<CreateModalProps> = ({ isOpen, onClose }) => {
             <label className="text-sm font-medium text-zinc-400">
               Playlist Name
             </label>
-            <div className="flex items-center gap-3 p-4 bg-zinc-800/50 rounded-xl border border-zinc-700 focus-within:border-blue-500 transition">
-              <div className="bg-blue-500 text-black p-2 rounded-lg">
-                <Music size={20} />
-              </div>
-              <input
-                type="text"
-                placeholder="My Awesome Playlist"
-                autoFocus
-                className="bg-transparent flex-1 border-none focus:ring-0 text-base font-medium placeholder:text-zinc-500 outline-none"
-                value={playlistName}
-                onChange={(e) => setPlaylistName(e.target.value)}
-                disabled={isUploading}
-              />
-            </div>
-            <p className="text-xs text-zinc-500">
-              Create your own collection of songs
-            </p>
+            <input
+              type="text"
+              placeholder="My Awesome Playlist"
+              className="w-full p-4 bg-zinc-800/50 rounded-xl border border-zinc-700 focus:border-blue-500 transition outline-none text-base font-medium placeholder:text-zinc-500"
+              value={playlistName}
+              onChange={(e) => setPlaylistName(e.target.value)}
+              disabled={isUploading}
+            />
           </div>
 
           {/* Error Message */}
@@ -306,10 +347,10 @@ const CreateModal: React.FC<CreateModalProps> = ({ isOpen, onClose }) => {
               {isUploading ? (
                 <>
                   <Loader2 size={20} className="animate-spin" />
-                  Creating...
+                  Saving...
                 </>
               ) : (
-                "Create Playlist"
+                "Save Changes"
               )}
             </button>
           </div>
@@ -319,4 +360,4 @@ const CreateModal: React.FC<CreateModalProps> = ({ isOpen, onClose }) => {
   );
 };
 
-export default CreateModal;
+export default EditPlaylistModal;

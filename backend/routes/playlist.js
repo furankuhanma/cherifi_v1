@@ -3,6 +3,7 @@ const router = express.Router();
 const Playlist = require('../models/Playlists');
 const Track = require('../models/Track');
 const { authenticateToken } = require('../middleware/auth');
+const { upload, processImage, deleteImage, extractFilename } = require('../middleware/upload');
 
 // 🔒 Apply authentication to ALL playlist routes
 router.use(authenticateToken);
@@ -108,6 +109,117 @@ router.post('/', async (req, res) => {
 });
 
 /**
+ * POST /api/playlists/:id/cover
+ * Upload custom cover image for playlist
+ * Multipart form data with 'image' field
+ */
+router.post('/:id/cover', upload.single('image'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userID = req.user.id;
+    const playlistId = id.startsWith('p') ? parseInt(id.substring(1)) : parseInt(id);
+
+    // Check if file was uploaded
+    if (!req.file) {
+      return res.status(400).json({
+        error: 'No image provided',
+        message: 'Please upload an image file'
+      });
+    }
+
+    console.log(`📸 Processing cover image for playlist ${playlistId}`);
+    console.log(`   Original: ${req.file.originalname} (${(req.file.size / 1024).toFixed(2)} KB)`);
+
+    // Verify playlist exists and belongs to user
+    const playlist = await Playlist.findById(playlistId, userID);
+    if (!playlist) {
+      return res.status(404).json({
+        error: 'Playlist not found',
+        message: 'Playlist does not exist or you do not have permission'
+      });
+    }
+
+    // Process and save image
+    const imageData = await processImage(req.file.buffer, req.file.originalname);
+
+    // Delete old custom image if it exists (don't delete default or external URLs)
+    if (playlist.coverUrl && playlist.coverUrl.startsWith('/playlist-images/')) {
+      const oldFilename = extractFilename(playlist.coverUrl);
+      await deleteImage(oldFilename);
+    }
+
+    // Update playlist with new cover image URL
+    const updatedPlaylist = await Playlist.update(playlistId, userID, {
+      coverUrl: imageData.url
+    });
+
+    console.log(`✅ Cover image uploaded: ${imageData.filename}`);
+
+    res.json({
+      message: 'Cover image uploaded successfully',
+      playlist: updatedPlaylist,
+      image: {
+        url: imageData.url,
+        filename: imageData.filename,
+        size: imageData.size
+      }
+    });
+
+  } catch (error) {
+    console.error('Error uploading cover image:', error);
+    res.status(500).json({
+      error: 'Failed to upload cover image',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * DELETE /api/playlists/:id/cover
+ * Remove custom cover image (revert to default)
+ */
+router.delete('/:id/cover', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userID = req.user.id;
+    const playlistId = id.startsWith('p') ? parseInt(id.substring(1)) : parseInt(id);
+
+    // Verify playlist exists and belongs to user
+    const playlist = await Playlist.findById(playlistId, userID);
+    if (!playlist) {
+      return res.status(404).json({
+        error: 'Playlist not found'
+      });
+    }
+
+    // Delete custom image if it exists
+    if (playlist.coverUrl && playlist.coverUrl.startsWith('/playlist-images/')) {
+      const filename = extractFilename(playlist.coverUrl);
+      await deleteImage(filename);
+    }
+
+    // Revert to default cover
+    const updatedPlaylist = await Playlist.update(playlistId, userID, {
+      coverUrl: `https://picsum.photos/seed/${playlistId}/600/600`
+    });
+
+    console.log(`🗑️ Cover image removed for playlist ${playlistId}`);
+
+    res.json({
+      message: 'Cover image removed successfully',
+      playlist: updatedPlaylist
+    });
+
+  } catch (error) {
+    console.error('Error removing cover image:', error);
+    res.status(500).json({
+      error: 'Failed to remove cover image',
+      message: error.message
+    });
+  }
+});
+
+/**
  * PUT /api/playlists/:id
  * Update playlist information
  * Body: { name?, description?, coverUrl? }
@@ -159,6 +271,15 @@ router.delete('/:id', async (req, res) => {
     const playlistId = id.startsWith('p') ? parseInt(id.substring(1)) : parseInt(id);
 
     console.log(`🗑️ Deleting playlist: ${playlistId} for user: ${req.user.username}`);
+
+    // Get playlist to check for custom cover image
+    const playlist = await Playlist.findById(playlistId, userID);
+    
+    if (playlist && playlist.coverUrl && playlist.coverUrl.startsWith('/playlist-images/')) {
+      const filename = extractFilename(playlist.coverUrl);
+      await deleteImage(filename);
+      console.log(`🗑️ Deleted cover image: ${filename}`);
+    }
 
     const deleted = await Playlist.delete(playlistId, userID);
 
