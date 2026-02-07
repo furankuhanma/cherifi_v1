@@ -19,6 +19,7 @@ import { cachedPlaylistAPI as playlistAPI } from "../services/cachedAPI";
 import { Playlist, Track } from "../types/types";
 import TrackOptionsMenu from "../components/TrackOptionsMenu";
 import AddToPlaylistModal from "../components/AddToPlayListModal";
+import { getPlaylistCoverUrl } from "../utils/imageUtils";
 
 const PlaylistDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -253,11 +254,10 @@ const PlaylistDetail: React.FC = () => {
 
         {/* Image: Kept mx-auto to stay centered on mobile */}
         <img
-          src={playlist.coverUrl}
+          src={getPlaylistCoverUrl(playlist.coverUrl)}
           alt={playlist.name}
-          className="w-48 h-48 md:w-64 md:h-64 shadow-2xl rounded-md mx-auto md:mx-0 shrink-0"
+          className="w-full max-w-[192px] aspect-square md:max-w-[256px] object-cover shadow-2xl rounded-md mx-auto md:mx-0 shrink-0"
         />
-
         {/* Text Wrapper: items-start ensures the column children don't center themselves */}
         <div className="flex flex-col items-start gap-2 text-left w-full">
           <span className="uppercase text-xs font-bold hidden md:inline">
