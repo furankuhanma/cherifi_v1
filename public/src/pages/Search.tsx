@@ -282,6 +282,12 @@ const Search: React.FC = () => {
                           </>
                         )}
                       </div>
+                      {track.duration && (
+                        <p className="text-xs text-zinc-500 mt-1">
+                          {Math.floor(track.duration / 60)}:
+                          {String(track.duration % 60).padStart(2, "0")}
+                        </p>
+                      )}
                     </div>
 
                     {/* Actions - Far Right */}
