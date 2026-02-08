@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useDownloads } from "../context/DownloadContext";
 import { usePlayer } from "../context/PlayerContext";
 import { useLikes } from "../context/LikeContext";
+
 import {
   Download,
   Play,
@@ -11,6 +12,7 @@ import {
   Heart,
   Music,
   HardDrive,
+  Search,
 } from "lucide-react";
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 
@@ -79,6 +81,16 @@ const OfflineLibrary: React.FC = () => {
     const mb = bytes / 1024 / 1024;
     return mb >= 1 ? `${mb.toFixed(1)} MB` : `${(bytes / 1024).toFixed(0)} KB`;
   };
+  const [searchQuery, setSearchQuery] = useState("");
+
+  // Filter tracks based on search query
+  const filteredTracks = downloadedTracks.filter((dt) => {
+    const query = searchQuery.toLowerCase();
+    return (
+      dt.track.title.toLowerCase().includes(query) ||
+      dt.track.artist.toLowerCase().includes(query)
+    );
+  });
 
   const formatDate = (dateString: string): string => {
     const date = new Date(dateString);
@@ -119,7 +131,7 @@ const OfflineLibrary: React.FC = () => {
   return (
     <div className="max-w-7xl mx-auto">
       <div className="mb-8">
-        <div className="flex items-center gap-3 mb-2">
+        <div className="flex items-center gap-3 mb-6">
           <div className="ml-2 bg-blue-500 p-3 rounded-lg mr-4">
             <Download size={30} className="text-black" />
           </div>
@@ -129,40 +141,17 @@ const OfflineLibrary: React.FC = () => {
           </div>
         </div>
 
-        <div className="mt-6 bg-gray-800/50 rounded-lg p-4">
-          <div className="flex items-center justify-between flex-wrap gap-4">
-            <div className="flex items-center gap-6">
-              <div className="flex items-center gap-2">
-                <Music size={20} className="text-blue-400" />
-                <span className="text-white font-semibold">
-                  {storageInfo.trackCount} tracks
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <HardDrive size={20} className="text-blue-400" />
-                <span className="text-white font-semibold">
-                  {storageInfo.totalSizeMB.toFixed(1)} MB used
-                </span>
-              </div>
-            </div>
+        <div className="relative w-full md:w-72">
+          <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
+            <Search size={18} className="text-gray-400" />
           </div>
-
-          {storageInfo.totalSizeMB > 0 && (
-            <div className="mt-4">
-              <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-gradient-to-r from-blue-400 to-blue-500 transition-all duration-300"
-                  style={{
-                    width: `${Math.min((storageInfo.totalSizeMB / 10000) * 100, 100)}%`,
-                  }}
-                />
-              </div>
-              <p className="text-xs text-gray-400 mt-1">
-                {storageInfo.totalSizeMB.toFixed(1)} MB of ~10,000 MB
-                recommended
-              </p>
-            </div>
-          )}
+          <input
+            type="text"
+            placeholder="Search in library..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full bg-gray-800/80 border border-gray-700 text-white text-sm rounded-full py-2.5 pl-10 pr-4 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+          />
         </div>
       </div>
 
@@ -174,7 +163,7 @@ const OfflineLibrary: React.FC = () => {
 
       {!loading && (
         <div className="space-y-1">
-          {downloadedTracks.map((downloadedTrack) => {
+          {filteredTracks.map((downloadedTrack) => {
             const track = downloadedTrack.track;
             const isCurrentTrack = currentTrack?.id === track.id;
             const isTrackPlaying = isCurrentTrack && isPlaying;
