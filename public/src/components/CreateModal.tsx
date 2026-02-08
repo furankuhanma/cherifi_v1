@@ -6,8 +6,12 @@ import {
   Upload,
   Image as ImageIcon,
   Loader2,
+  Wifi,
+  WifiOff,
+  Info,
 } from "lucide-react";
 import { useLibrary } from "../context/LibraryContext";
+import { usePlaylists } from "../context/PlaylistContext";
 
 interface CreateModalProps {
   isOpen: boolean;
@@ -19,13 +23,16 @@ const CreateModal: React.FC<CreateModalProps> = ({ isOpen, onClose }) => {
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
-  const [showImageOptions, setShowImageOptions] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [playlistType, setPlaylistType] = useState<"online" | "offline">(
+    "online",
+  );
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
   const { addPlaylist } = useLibrary();
+  const { createPlaylist: createOfflinePlaylist } = usePlaylists();
 
   // Prevent background scroll when modal is open
   useEffect(() => {
@@ -42,8 +49,8 @@ const CreateModal: React.FC<CreateModalProps> = ({ isOpen, onClose }) => {
       setPlaylistName("");
       setSelectedImage(null);
       setImagePreview(null);
-      setShowImageOptions(false);
       setError(null);
+      setPlaylistType("online");
     }
   }, [isOpen]);
 
@@ -73,8 +80,6 @@ const CreateModal: React.FC<CreateModalProps> = ({ isOpen, onClose }) => {
       setImagePreview(reader.result as string);
     };
     reader.readAsDataURL(file);
-
-    setShowImageOptions(false);
   };
 
   // Open file picker
@@ -95,7 +100,7 @@ const CreateModal: React.FC<CreateModalProps> = ({ isOpen, onClose }) => {
     if (cameraInputRef.current) cameraInputRef.current.value = "";
   };
 
-  // Upload image to server
+  // Upload image to server (for online playlists)
   const uploadImage = async (playlistId: string): Promise<string | null> => {
     if (!selectedImage) return null;
 
@@ -142,12 +147,23 @@ const CreateModal: React.FC<CreateModalProps> = ({ isOpen, onClose }) => {
     setError(null);
 
     try {
-      // Create playlist first with default cover
-      const playlist = await addPlaylist(playlistName, "default");
+      if (playlistType === "offline") {
+        // Create offline playlist - image stored in IndexedDB
+        await createOfflinePlaylist(
+          playlistName.trim(),
+          undefined, // no description for now
+          selectedImage || undefined,
+        );
+        console.log("✅ Offline playlist created (stored in IndexedDB)");
+      } else {
+        // Create online playlist (existing flow)
+        const playlist = await addPlaylist(playlistName, "default");
 
-      // If image is selected, upload it
-      if (selectedImage && playlist) {
-        await uploadImage(playlist.id);
+        // If image is selected, upload it to server
+        if (selectedImage && playlist) {
+          await uploadImage(playlist.id);
+        }
+        console.log("✅ Online playlist created");
       }
 
       // Reset and close
@@ -173,147 +189,262 @@ const CreateModal: React.FC<CreateModalProps> = ({ isOpen, onClose }) => {
         onClick={onClose}
       />
 
-      {/* Content */}
-      <div className="relative w-full max-w-lg bg-zinc-900 border-t md:border border-zinc-800 rounded-t-2xl md:rounded-2xl p-6 md:p-8 animate-in slide-in-from-bottom duration-300">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-bold">Create Playlist</h2>
+      {/* Content - max height with scroll */}
+      <div className="relative w-full max-w-lg max-h-[90vh] bg-zinc-900 border-t md:border border-zinc-800 rounded-t-2xl md:rounded-2xl overflow-hidden flex flex-col animate-in slide-in-from-bottom duration-300">
+        {/* Fixed Header */}
+        <div className="flex items-center justify-between p-4 border-b border-zinc-800 flex-shrink-0">
+          <h2 className="text-lg font-bold">Create Playlist</h2>
           <button
             onClick={onClose}
             className="p-2 hover:bg-zinc-800 rounded-full transition"
             disabled={isUploading}
           >
-            <X size={24} />
+            <X size={20} />
           </button>
         </div>
 
-        <form onSubmit={handleCreate} className="space-y-6">
-          {/* Cover Image Section */}
-          <div className="flex flex-col items-center gap-4">
-            {/* Image Preview or Placeholder */}
-            <div className="relative w-48 h-48 bg-zinc-800 rounded-lg overflow-hidden group">
-              {imagePreview ? (
-                <>
-                  <img
-                    src={imagePreview}
-                    alt="Playlist cover preview"
-                    className="w-full h-full object-cover"
-                  />
+        {/* Scrollable Form */}
+        <form onSubmit={handleCreate} className="flex-1 overflow-y-auto">
+          <div className="p-4 space-y-4">
+            {/* Playlist Type Selection - Compact */}
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-zinc-400">
+                Playlist Type
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                {/* Online Option */}
+                <button
+                  type="button"
+                  onClick={() => setPlaylistType("online")}
+                  disabled={isUploading}
+                  className={`relative p-2.5 rounded-lg border-2 transition-all ${
+                    playlistType === "online"
+                      ? "border-blue-500 bg-blue-500/10"
+                      : "border-zinc-700 bg-zinc-800/50 hover:border-zinc-600"
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <div
+                      className={`p-1.5 rounded ${
+                        playlistType === "online"
+                          ? "bg-blue-500"
+                          : "bg-zinc-700"
+                      }`}
+                    >
+                      <Wifi
+                        size={14}
+                        className={
+                          playlistType === "online"
+                            ? "text-black"
+                            : "text-white"
+                        }
+                      />
+                    </div>
+                    <div className="text-left flex-1">
+                      <p className="font-semibold text-xs">Online</p>
+                      <p className="text-[10px] text-zinc-400">Account sync</p>
+                    </div>
+                  </div>
+                  {playlistType === "online" && (
+                    <div className="absolute top-1.5 right-1.5 w-3.5 h-3.5 bg-blue-500 rounded-full flex items-center justify-center">
+                      <div className="w-1.5 h-1.5 bg-white rounded-full" />
+                    </div>
+                  )}
+                </button>
+
+                {/* Offline Option */}
+                <button
+                  type="button"
+                  onClick={() => setPlaylistType("offline")}
+                  disabled={isUploading}
+                  className={`relative p-2.5 rounded-lg border-2 transition-all ${
+                    playlistType === "offline"
+                      ? "border-blue-500 bg-blue-500/10"
+                      : "border-zinc-700 bg-zinc-800/50 hover:border-zinc-600"
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <div
+                      className={`p-1.5 rounded ${
+                        playlistType === "offline"
+                          ? "bg-blue-500"
+                          : "bg-zinc-700"
+                      }`}
+                    >
+                      <WifiOff
+                        size={14}
+                        className={
+                          playlistType === "offline"
+                            ? "text-black"
+                            : "text-white"
+                        }
+                      />
+                    </div>
+                    <div className="text-left flex-1">
+                      <p className="font-semibold text-xs">Offline</p>
+                      <p className="text-[10px] text-zinc-400">Device only</p>
+                    </div>
+                  </div>
+                  {playlistType === "offline" && (
+                    <div className="absolute top-1.5 right-1.5 w-3.5 h-3.5 bg-blue-500 rounded-full flex items-center justify-center">
+                      <div className="w-1.5 h-1.5 bg-white rounded-full" />
+                    </div>
+                  )}
+                </button>
+              </div>
+
+              {/* Compact Info Box */}
+              <div
+                className={`flex gap-2 p-2 rounded-lg border text-left ${
+                  playlistType === "online"
+                    ? "bg-blue-500/5 border-blue-500/20"
+                    : "bg-orange-500/5 border-orange-500/20"
+                }`}
+              >
+                <Info
+                  size={12}
+                  className={`flex-shrink-0 mt-0.5 ${
+                    playlistType === "online"
+                      ? "text-blue-400"
+                      : "text-orange-400"
+                  }`}
+                />
+                <p className="text-[10px] text-zinc-300 leading-relaxed">
+                  {playlistType === "online" ? (
+                    <>Synced to account. Safe across devices.</>
+                  ) : (
+                    <>Local only. Lost if browser data cleared.</>
+                  )}
+                </p>
+              </div>
+            </div>
+
+            {/* Cover Image Section - Compact */}
+            <div className="flex flex-col items-center gap-3">
+              {/* Smaller Image Preview */}
+              <div className="relative w-32 h-32 bg-zinc-800 rounded-lg overflow-hidden group">
+                {imagePreview ? (
+                  <>
+                    <img
+                      src={imagePreview}
+                      alt="Playlist cover preview"
+                      className="w-full h-full object-cover"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleRemoveImage}
+                      className="absolute top-1.5 right-1.5 bg-red-500 text-white p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition"
+                    >
+                      <X size={12} />
+                    </button>
+                  </>
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <ImageIcon size={32} className="text-zinc-600" />
+                  </div>
+                )}
+              </div>
+
+              {/* Compact Upload Buttons */}
+              {!imagePreview && (
+                <div className="flex gap-2">
                   <button
                     type="button"
-                    onClick={handleRemoveImage}
-                    className="absolute top-2 right-2 bg-red-500 text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition"
+                    onClick={handleCamera}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded-full transition text-xs font-medium"
                   >
-                    <X size={16} />
+                    <Camera size={14} />
+                    Camera
                   </button>
-                </>
-              ) : (
-                <div className="w-full h-full flex items-center justify-center">
-                  <ImageIcon size={48} className="text-zinc-600" />
+                  <button
+                    type="button"
+                    onClick={handleFilePicker}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded-full transition text-xs font-medium"
+                  >
+                    <Upload size={14} />
+                    Upload
+                  </button>
                 </div>
               )}
+
+              {/* Hidden file inputs */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleImageSelect}
+                className="hidden"
+              />
+              <input
+                ref={cameraInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                onChange={handleImageSelect}
+                className="hidden"
+              />
+
+              <p className="text-[10px] text-zinc-500 text-center">
+                Max 10MB • Auto-optimized
+              </p>
             </div>
 
-            {/* Image Upload Buttons */}
-            {!imagePreview && (
-              <div className="flex gap-3">
-                <button
-                  type="button"
-                  onClick={handleCamera}
-                  className="flex items-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-full transition text-sm font-medium"
-                >
-                  <Camera size={18} />
-                  Camera
-                </button>
-                <button
-                  type="button"
-                  onClick={handleFilePicker}
-                  className="flex items-center gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-full transition text-sm font-medium"
-                >
-                  <Upload size={18} />
-                  Upload
-                </button>
+            {/* Playlist Name Input */}
+            <div className="flex flex-col gap-2">
+              <label className="text-xs font-medium text-zinc-400">
+                Playlist Name
+              </label>
+              <div className="flex items-center gap-2.5 p-3 bg-zinc-800/50 rounded-lg border border-zinc-700 focus-within:border-blue-500 transition">
+                <div className="bg-blue-500 text-black p-1.5 rounded">
+                  <Music size={16} />
+                </div>
+                <input
+                  type="text"
+                  placeholder="My Awesome Playlist"
+                  autoFocus
+                  className="bg-transparent flex-1 border-none focus:ring-0 text-sm font-medium placeholder:text-zinc-500 outline-none"
+                  value={playlistName}
+                  onChange={(e) => setPlaylistName(e.target.value)}
+                  disabled={isUploading}
+                />
+              </div>
+            </div>
+
+            {/* Error Message */}
+            {error && (
+              <div className="p-2.5 bg-red-500/10 border border-red-500/20 rounded-lg">
+                <p className="text-xs text-red-400">{error}</p>
               </div>
             )}
-
-            {/* Hidden file inputs */}
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              onChange={handleImageSelect}
-              className="hidden"
-            />
-            <input
-              ref={cameraInputRef}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              onChange={handleImageSelect}
-              className="hidden"
-            />
-
-            <p className="text-xs text-zinc-500 text-center">
-              Any image format • Max 10MB • Auto-optimized
-            </p>
-          </div>
-
-          {/* Playlist Name Input */}
-          <div className="flex flex-col gap-2">
-            <label className="text-sm font-medium text-zinc-400">
-              Playlist Name
-            </label>
-            <div className="flex items-center gap-3 p-4 bg-zinc-800/50 rounded-xl border border-zinc-700 focus-within:border-blue-500 transition">
-              <div className="bg-blue-500 text-black p-2 rounded-lg">
-                <Music size={20} />
-              </div>
-              <input
-                type="text"
-                placeholder="My Awesome Playlist"
-                autoFocus
-                className="bg-transparent flex-1 border-none focus:ring-0 text-base font-medium placeholder:text-zinc-500 outline-none"
-                value={playlistName}
-                onChange={(e) => setPlaylistName(e.target.value)}
-                disabled={isUploading}
-              />
-            </div>
-            <p className="text-xs text-zinc-500">
-              Create your own collection of songs
-            </p>
-          </div>
-
-          {/* Error Message */}
-          {error && (
-            <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
-              <p className="text-sm text-red-400">{error}</p>
-            </div>
-          )}
-
-          {/* Action Buttons */}
-          <div className="pt-4 flex gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 py-3 font-bold text-zinc-400 hover:text-white transition"
-              disabled={isUploading}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={isUploading || !playlistName.trim()}
-              className="flex-1 bg-blue-500 text-black py-3 rounded-full font-bold hover:scale-105 active:scale-95 transition shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center gap-2"
-            >
-              {isUploading ? (
-                <>
-                  <Loader2 size={20} className="animate-spin" />
-                  Creating...
-                </>
-              ) : (
-                "Create Playlist"
-              )}
-            </button>
           </div>
         </form>
+
+        {/* Fixed Footer */}
+        <div className="p-4 border-t border-zinc-800 flex gap-2 flex-shrink-0">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 py-2.5 font-semibold text-sm text-zinc-400 hover:text-white transition"
+            disabled={isUploading}
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            onClick={handleCreate}
+            disabled={isUploading || !playlistName.trim()}
+            className="flex-1 bg-blue-500 text-black py-2.5 rounded-full font-semibold text-sm hover:scale-105 active:scale-95 transition shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center gap-2"
+          >
+            {isUploading ? (
+              <>
+                <Loader2 size={16} className="animate-spin" />
+                Creating...
+              </>
+            ) : (
+              "Create Playlist"
+            )}
+          </button>
+        </div>
       </div>
     </div>
   );

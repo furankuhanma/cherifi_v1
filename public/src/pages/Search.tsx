@@ -9,6 +9,7 @@ import { useDownloads } from "../context/DownloadContext";
 import TrackOptionsMenu from "../components/TrackOptionsMenu";
 import AddToPlaylistModal from "../components/AddToPlayListModal";
 import { useSearchParams } from "react-router-dom";
+import { X } from "lucide-react";
 
 const Search: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -177,6 +178,16 @@ const Search: React.FC = () => {
           onChange={(e) => setSearchQuery(e.target.value)}
           className="w-full bg-white text-black py-3 pl-10 pr-4 rounded-full font-medium focus:outline-none placeholder-zinc-500"
         />
+        {/* Clear Button (Right) */}
+        {searchQuery && (
+          <button
+            onClick={() => setSearchQuery("")}
+            className="absolute inset-y-0 right-3 flex items-center text-gray-400 hover:text-white transition-colors"
+            aria-label="Clear search"
+          >
+            <X size={18} />
+          </button>
+        )}
       </div>
 
       {/* Search Results */}

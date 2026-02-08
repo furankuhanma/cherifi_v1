@@ -1,21 +1,59 @@
-import React, { useState, useEffect } from "react";
-import { X, Plus, Music, Check, Loader, Minus } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
+import {
+  X,
+  Plus,
+  Music,
+  Check,
+  Loader,
+  Minus,
+  Wifi,
+  WifiOff,
+} from "lucide-react";
 import { Track } from "../types/types";
 import { useLibrary } from "../context/LibraryContext";
+import { usePlaylists } from "../context/PlaylistContext";
 import { cachedPlaylistAPI as playlistAPI } from "../services/cachedAPI";
 
 interface AddToPlaylistModalProps {
   isOpen: boolean;
   onClose: () => void;
   track: Track | null;
+  trackId?: string;
+  trackTitle?: string;
+  defaultMode?: "online" | "offline";
 }
 
 const AddToPlaylistModal: React.FC<AddToPlaylistModalProps> = ({
   isOpen,
   onClose,
-  track,
+  track: trackProp,
+  trackId,
+  trackTitle,
+  defaultMode = "online",
 }) => {
-  const { playlists, addPlaylist, refreshPlaylists } = useLibrary();
+  // Support both track object and trackId/trackTitle props
+  const track =
+    trackProp ||
+    (trackId
+      ? ({ id: trackId, title: trackTitle || "", videoId: trackId } as Track)
+      : null);
+
+  // Online playlists (from LibraryContext)
+  const {
+    playlists: onlinePlaylists,
+    addPlaylist: addOnlinePlaylist,
+    refreshPlaylists: refreshOnlinePlaylists,
+  } = useLibrary();
+
+  // Offline playlists (from PlaylistContext)
+  const {
+    playlists: offlinePlaylists,
+    createPlaylist: addOfflinePlaylist,
+    addTracksToPlaylist,
+    removeTracksFromPlaylist,
+  } = usePlaylists();
+
+  const [mode, setMode] = useState<"online" | "offline">(defaultMode);
   const [isCreating, setIsCreating] = useState(false);
   const [newPlaylistName, setNewPlaylistName] = useState("");
   const [processingPlaylist, setProcessingPlaylist] = useState<string | null>(
@@ -26,106 +64,145 @@ const AddToPlaylistModal: React.FC<AddToPlaylistModalProps> = ({
   );
   const [error, setError] = useState<string | null>(null);
 
-  // 🎯 Local state to track which playlists contain the track (Optimistic UI like LikeContext)
+  // Track status in playlists
   const [trackInPlaylists, setTrackInPlaylists] = useState<Set<string>>(
     new Set(),
   );
   const [isCheckingPlaylists, setIsCheckingPlaylists] = useState(false);
 
-  // 🔄 Check track status in all playlists when modal opens
+  // Get current playlists based on mode
+  const playlists = mode === "online" ? onlinePlaylists : offlinePlaylists;
+
+  // Use a ref to prevent infinite re-checking
+  const lastCheckedRef = React.useRef<string>("");
+
+  // Check track status in playlists when modal opens or mode changes
   useEffect(() => {
     if (!isOpen || !track) {
       setTrackInPlaylists(new Set());
+      lastCheckedRef.current = "";
+      return;
+    }
+
+    const trackIdToCheck = track.videoId || track.id;
+    const checkKey = `${mode}-${trackIdToCheck}-${playlists.length}`;
+
+    // Skip if we already checked this exact scenario
+    if (lastCheckedRef.current === checkKey) {
       return;
     }
 
     const checkTrackStatus = async () => {
       setIsCheckingPlaylists(true);
-      console.log("🔍 Checking which playlists contain:", track.title);
+      console.log(`🔍 Checking ${mode} playlists for:`, track.title);
 
-      const trackIdToCheck = track.videoId || track.id;
       const playlistsContainingTrack = new Set<string>();
 
-      // Check each playlist via API in parallel
-      const checkPromises = playlists.map(async (playlist) => {
-        try {
-          const exists = await playlistAPI.hasTrack(
-            playlist.id,
-            trackIdToCheck,
-          );
-          if (exists) {
-            playlistsContainingTrack.add(playlist.id);
-            console.log(`✅ Track IS in playlist: ${playlist.name}`);
-          } else {
-            console.log(`❌ Track NOT in playlist: ${playlist.name}`);
+      if (mode === "online") {
+        // Check online playlists via API
+        const checkPromises = playlists.map(async (playlist) => {
+          try {
+            const exists = await playlistAPI.hasTrack(
+              playlist.id,
+              trackIdToCheck,
+            );
+            if (exists) {
+              playlistsContainingTrack.add(playlist.id);
+              console.log(`✅ Track IS in online playlist: ${playlist.name}`);
+            }
+          } catch (error) {
+            console.error(
+              `❌ Failed to check online playlist ${playlist.name}:`,
+              error,
+            );
           }
-        } catch (error) {
-          console.error(`❌ Failed to check playlist ${playlist.name}:`, error);
-        }
-      });
-
-      await Promise.all(checkPromises);
+        });
+        await Promise.all(checkPromises);
+      } else {
+        // Check offline playlists (they have trackIds array)
+        playlists.forEach((playlist) => {
+          if (playlist.trackIds && playlist.trackIds.includes(trackIdToCheck)) {
+            playlistsContainingTrack.add(playlist.id);
+            console.log(`✅ Track IS in offline playlist: ${playlist.name}`);
+          }
+        });
+      }
 
       setTrackInPlaylists(playlistsContainingTrack);
       setIsCheckingPlaylists(false);
+      lastCheckedRef.current = checkKey;
       console.log(
-        `📊 Track found in ${playlistsContainingTrack.size}/${playlists.length} playlists`,
+        `📊 Track found in ${playlistsContainingTrack.size}/${playlists.length} ${mode} playlists`,
       );
     };
 
     checkTrackStatus();
-  }, [isOpen, track, playlists]);
+  }, [isOpen, track, mode, playlists.length]);
 
   if (!isOpen || !track) return null;
 
-  // Check if track is in a specific playlist
   const isTrackInPlaylist = (playlistId: string): boolean => {
     return trackInPlaylists.has(playlistId);
   };
 
-  // 🎯 Toggle track (add or remove) with optimistic updates (like LikeContext)
+  // Toggle track in playlist (add or remove)
   const handleToggleTrack = async (playlistId: string) => {
     const isInPlaylist = isTrackInPlaylist(playlistId);
-    const trackId = track.videoId || track.id;
+    const trackIdToUse = track.videoId || track.id;
 
     setProcessingPlaylist(playlistId);
     setError(null);
 
-    // 🚀 OPTIMISTIC UPDATE - Update UI immediately
+    // Optimistic update
     setTrackInPlaylists((prev) => {
       const newSet = new Set(prev);
       if (isInPlaylist) {
         newSet.delete(playlistId);
-        console.log(`⚡ Optimistically removed from: ${playlistId}`);
+        console.log(`⚡ Optimistically removed from ${mode}: ${playlistId}`);
       } else {
         newSet.add(playlistId);
-        console.log(`⚡ Optimistically added to: ${playlistId}`);
+        console.log(`⚡ Optimistically added to ${mode}: ${playlistId}`);
       }
       return newSet;
     });
 
     try {
-      if (isInPlaylist) {
-        console.log(
-          `➖ Removing track "${track.title}" from playlist: ${playlistId}`,
-        );
-        await playlistAPI.removeTrack(playlistId, trackId);
+      if (mode === "online") {
+        // Online playlist operations
+        if (isInPlaylist) {
+          console.log(
+            `➖ Removing track "${track.title}" from online playlist: ${playlistId}`,
+          );
+          await playlistAPI.removeTrack(playlistId, trackIdToUse);
+        } else {
+          console.log(
+            `➕ Adding track "${track.title}" to online playlist: ${playlistId}`,
+          );
+          await playlistAPI.addTrack(playlistId, trackIdToUse, track);
+        }
+        // Refresh online playlists
+        setTimeout(() => {
+          refreshOnlinePlaylists();
+        }, 100);
       } else {
-        console.log(
-          `➕ Adding track "${track.title}" to playlist: ${playlistId}`,
-        );
-        await playlistAPI.addTrack(playlistId, trackId, track);
+        // Offline playlist operations
+        if (isInPlaylist) {
+          console.log(
+            `➖ Removing track "${track.title}" from offline playlist: ${playlistId}`,
+          );
+          await removeTracksFromPlaylist(playlistId, [trackIdToUse]);
+        } else {
+          console.log(
+            `➕ Adding track "${track.title}" to offline playlist: ${playlistId}`,
+          );
+          await addTracksToPlaylist(playlistId, [trackIdToUse]);
+        }
+        // Force re-check after offline operation completes
+        lastCheckedRef.current = "";
       }
 
       // Show success animation
       setSuccessPlaylistId(playlistId);
-
-      // Refresh playlists in background to sync trackCount
-      setTimeout(() => {
-        refreshPlaylists();
-      }, 100);
-
-      // Clear success state after animation
       setTimeout(() => {
         setSuccessPlaylistId(null);
       }, 1000);
@@ -135,15 +212,13 @@ const AddToPlaylistModal: React.FC<AddToPlaylistModalProps> = ({
         err,
       );
 
-      // 🔄 ROLLBACK - Revert optimistic update on error
+      // Rollback optimistic update
       setTrackInPlaylists((prev) => {
         const newSet = new Set(prev);
         if (isInPlaylist) {
-          newSet.add(playlistId); // Rollback: add it back
-          console.log(`🔄 Rolled back: re-added to ${playlistId}`);
+          newSet.add(playlistId);
         } else {
-          newSet.delete(playlistId); // Rollback: remove it
-          console.log(`🔄 Rolled back: removed from ${playlistId}`);
+          newSet.delete(playlistId);
         }
         return newSet;
       });
@@ -158,19 +233,35 @@ const AddToPlaylistModal: React.FC<AddToPlaylistModalProps> = ({
     }
   };
 
+  // Create new playlist and add track
   const handleCreateAndAdd = async () => {
     if (!newPlaylistName.trim()) return;
     setIsCreating(true);
     setError(null);
 
     try {
-      console.log(`📝 Creating new playlist: "${newPlaylistName.trim()}"`);
-      await addPlaylist(newPlaylistName.trim(), `Created for ${track.title}`);
-      await refreshPlaylists();
+      console.log(
+        `📝 Creating new ${mode} playlist: "${newPlaylistName.trim()}"`,
+      );
+
+      if (mode === "online") {
+        await addOnlinePlaylist(
+          newPlaylistName.trim(),
+          `Created for ${track.title}`,
+        );
+        await refreshOnlinePlaylists();
+      } else {
+        await addOfflinePlaylist(
+          newPlaylistName.trim(),
+          `Created for ${track.title}`,
+        );
+      }
 
       // Small delay to let state update, then add track to new playlist
       setTimeout(async () => {
-        const createdPlaylist = playlists.find(
+        const currentPlaylists =
+          mode === "online" ? onlinePlaylists : offlinePlaylists;
+        const createdPlaylist = currentPlaylists.find(
           (p) => p.name === newPlaylistName.trim(),
         );
         if (createdPlaylist) {
@@ -202,7 +293,7 @@ const AddToPlaylistModal: React.FC<AddToPlaylistModalProps> = ({
       <div className="relative z-[1000] bg-zinc-900 rounded-t-2xl md:rounded-xl w-full max-w-md flex flex-col max-h-[85vh] overflow-hidden shadow-2xl animate-in slide-in-from-bottom duration-300 md:duration-200 md:zoom-in-95">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-zinc-800 shrink-0">
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <h2 className="text-xl font-bold">Add to Playlist</h2>
             <p className="text-sm text-zinc-400 mt-1 truncate">{track.title}</p>
           </div>
@@ -212,6 +303,34 @@ const AddToPlaylistModal: React.FC<AddToPlaylistModalProps> = ({
           >
             <X size={24} />
           </button>
+        </div>
+
+        {/* Mode Toggle */}
+        <div className="px-6 pt-4 pb-2 shrink-0">
+          <div className="flex gap-2 bg-zinc-800 rounded-lg p-1">
+            <button
+              onClick={() => setMode("online")}
+              className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-md font-medium text-sm transition-all ${
+                mode === "online"
+                  ? "bg-blue-500 text-white shadow-lg"
+                  : "text-zinc-400 hover:text-white"
+              }`}
+            >
+              <Wifi size={16} />
+              Online
+            </button>
+            <button
+              onClick={() => setMode("offline")}
+              className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-md font-medium text-sm transition-all ${
+                mode === "offline"
+                  ? "bg-blue-500 text-white shadow-lg"
+                  : "text-zinc-400 hover:text-white"
+              }`}
+            >
+              <WifiOff size={16} />
+              Offline
+            </button>
+          </div>
         </div>
 
         {/* Scrollable Content */}
@@ -237,7 +356,7 @@ const AddToPlaylistModal: React.FC<AddToPlaylistModalProps> = ({
               </div>
               <input
                 type="text"
-                placeholder="Create new playlist"
+                placeholder={`Create new ${mode} playlist`}
                 value={newPlaylistName}
                 onChange={(e) => setNewPlaylistName(e.target.value)}
                 onKeyDown={(e) => {
@@ -272,7 +391,7 @@ const AddToPlaylistModal: React.FC<AddToPlaylistModalProps> = ({
             ) : playlists.length === 0 ? (
               <div className="text-center py-12">
                 <Music size={48} className="mx-auto text-zinc-700 mb-3" />
-                <p className="text-zinc-400 text-sm">No playlists yet</p>
+                <p className="text-zinc-400 text-sm">No {mode} playlists yet</p>
                 <p className="text-zinc-500 text-xs mt-1">
                   Create one above to get started
                 </p>
@@ -280,7 +399,8 @@ const AddToPlaylistModal: React.FC<AddToPlaylistModalProps> = ({
             ) : (
               <div className="space-y-2">
                 <p className="text-xs font-bold text-zinc-500 uppercase tracking-wider px-2 mb-3">
-                  Your Playlists ({playlists.length})
+                  {mode === "online" ? "Online" : "Offline"} Playlists (
+                  {playlists.length})
                 </p>
                 {playlists.map((playlist) => {
                   const isProcessing = processingPlaylist === playlist.id;
@@ -298,17 +418,25 @@ const AddToPlaylistModal: React.FC<AddToPlaylistModalProps> = ({
                           : "hover:bg-zinc-800 border border-transparent"
                       }`}
                     >
-                      <img
-                        src={playlist.coverUrl}
-                        alt={playlist.name}
-                        className="w-12 h-12 rounded object-cover flex-shrink-0"
-                      />
+                      {playlist.coverUrl || playlist.imageUrl ? (
+                        <img
+                          src={playlist.coverUrl || playlist.imageUrl}
+                          alt={playlist.name}
+                          className="w-12 h-12 rounded object-cover flex-shrink-0"
+                        />
+                      ) : (
+                        <div className="w-12 h-12 rounded bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center flex-shrink-0">
+                          <Music size={24} className="text-white/80" />
+                        </div>
+                      )}
                       <div className="flex-1 text-left min-w-0">
                         <p className="font-medium text-sm truncate">
                           {playlist.name}
                         </p>
                         <p className="text-xs text-zinc-400 flex items-center gap-1">
-                          {playlist.trackCount || 0} songs
+                          {mode === "online"
+                            ? `${playlist.trackCount || 0} songs`
+                            : `${playlist.trackIds?.length || 0} songs`}
                           {isInPlaylist && (
                             <span className="inline-flex items-center gap-1 text-blue-400 font-medium">
                               • Added
