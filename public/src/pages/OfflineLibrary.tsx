@@ -22,13 +22,59 @@ import {
 import { ConfirmDeleteModal } from "../components/ConfirmDeleteModal";
 import AddToPlaylistModal from "../components/AddToPlayListModal";
 
+// NEW: Circular Progress Component (App Store style)
+const CircularProgress: React.FC<{ progress: number }> = ({ progress }) => {
+  const radius = 16;
+  const circumference = 2 * Math.PI * radius;
+  const offset = circumference - (progress / 100) * circumference;
+
+  return (
+    <div className="relative w-9 h-9 flex items-center justify-center">
+      {/* Background circle */}
+      <svg className="w-9 h-9 -rotate-90" viewBox="0 0 36 36">
+        <circle
+          cx="18"
+          cy="18"
+          r={radius}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.5"
+          className="text-zinc-700"
+        />
+        {/* Progress circle */}
+        <circle
+          cx="18"
+          cy="18"
+          r={radius}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.5"
+          strokeDasharray={circumference}
+          strokeDashoffset={offset}
+          strokeLinecap="round"
+          className="text-blue-500 transition-all duration-300"
+        />
+      </svg>
+      {/* Pause/Stop button in center */}
+      <div className="absolute inset-0 flex items-center justify-center">
+        <div className="w-2 h-2 bg-zinc-400 rounded-sm" />
+      </div>
+    </div>
+  );
+};
+
 const OfflineLibrary: React.FC = () => {
   const navigate = useNavigate();
   const { setIsCreateOpen } = useOutletContext<{
     setIsCreateOpen: (open: boolean) => void;
   }>();
-  const { downloadedTracks, removeDownload, clearDownloads, getStorageUsage } =
-    useDownloads();
+  const {
+    downloadedTracks,
+    downloadQueue, // NEW: Get download queue
+    removeDownload,
+    clearDownloads,
+    getStorageUsage,
+  } = useDownloads();
   const { playTrack, setPlaylist, currentTrack, isPlaying } = usePlayer();
   const { isLiked, toggleLike } = useLikes();
   const {
@@ -117,7 +163,6 @@ const OfflineLibrary: React.FC = () => {
   };
 
   const handlePlaylistClick = (playlistId: string) => {
-    // Navigate to a playlist detail page (you'll need to create this)
     navigate(`/offline-playlist/${playlistId}`);
   };
 
@@ -150,6 +195,11 @@ const OfflineLibrary: React.FC = () => {
     if (diffDays < 365) return `${Math.floor(diffDays / 30)} months ago`;
     return date.toLocaleDateString();
   };
+
+  // NEW: Filter only active downloads (downloading status)
+  const activeDownloads = downloadQueue.filter(
+    (dq) => dq.status === "downloading",
+  );
 
   if (!loading && downloadedTracks.length === 0 && playlists.length === 0) {
     return (
@@ -322,13 +372,52 @@ const OfflineLibrary: React.FC = () => {
       </div>
 
       {/* Downloaded Tracks Section */}
-      {downloadedTracks.length > 0 && (
+      {(downloadedTracks.length > 0 || activeDownloads.length > 0) && (
         <div>
           <h2 className="text-lg font-bold text-white mb-4 ml-2">
             Downloaded Tracks
           </h2>
           {!loading && (
             <div className="space-y-1">
+              {/* NEW: Downloading Tracks (Pinned to Top) */}
+              {activeDownloads.map((download) => (
+                <div
+                  key={download.trackId}
+                  className="relative flex items-center gap-4 rounded-lg p-2 bg-zinc-800/30 cursor-not-allowed opacity-75"
+                >
+                  {/* Image Container */}
+                  <div className="relative h-12 w-12 flex-shrink-0">
+                    <img
+                      src={download.coverUrl || "/placeholder-album.png"}
+                      alt={download.trackTitle}
+                      className="h-full w-full aspect-square object-cover rounded-md shadow-md"
+                    />
+                    {/* Dimmed Overlay */}
+                    <div className="absolute inset-0 flex items-center justify-center rounded-md bg-black/50"></div>
+                  </div>
+
+                  {/* Track Info */}
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-sm font-semibold truncate text-zinc-300">
+                      {download.trackTitle}
+                    </h3>
+                    <div className="flex items-center gap-1 text-xs text-zinc-500">
+                      <span className="truncate">{download.trackArtist}</span>
+                    </div>
+                    {/* Progress Text */}
+                    <div className="text-[10px] text-blue-400 mt-0.5">
+                      Downloading... {download.progress}%
+                    </div>
+                  </div>
+
+                  {/* NEW: Circular Progress Indicator */}
+                  <div className="flex items-center gap-2">
+                    <CircularProgress progress={download.progress} />
+                  </div>
+                </div>
+              ))}
+
+              {/* Downloaded Tracks */}
               {filteredTracks.map((downloadedTrack) => {
                 const track = downloadedTrack.track;
                 const isCurrentTrack = currentTrack?.id === track.id;

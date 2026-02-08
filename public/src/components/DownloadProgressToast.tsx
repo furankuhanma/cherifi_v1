@@ -1,40 +1,93 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useDownloads } from "../context/DownloadContext";
 import { Download, CheckCircle, XCircle, X } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion"; // Added Framer Motion
+import { motion, AnimatePresence } from "framer-motion";
 
 const DownloadProgressToast: React.FC = () => {
   const { downloadQueue } = useDownloads();
-  const [visibleDownloads, setVisibleDownloads] = useState<string[]>([]);
+  const [dismissedDownloads, setDismissedDownloads] = useState<Set<string>>(
+    new Set(),
+  );
+  const timersRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
 
-  // Auto-hide completed/failed downloads after 3 seconds
+  // Auto-hide downloads after specific durations
   useEffect(() => {
     downloadQueue.forEach((download) => {
-      if (download.status === "completed" || download.status === "failed") {
+      const trackId = download.trackId;
+
+      // Skip if already dismissed
+      if (dismissedDownloads.has(trackId)) {
+        return;
+      }
+
+      // Clear existing timer for this track
+      const existingTimer = timersRef.current.get(trackId);
+      if (existingTimer) {
+        clearTimeout(existingTimer);
+      }
+
+      // Set auto-hide timer based on status
+      let hideDelay = 0;
+
+      if (download.status === "completed") {
+        hideDelay = 3000; // 3 seconds for completed
+      } else if (download.status === "failed") {
+        hideDelay = 5000; // 5 seconds for failed (longer to read error)
+      } else if (download.status === "downloading") {
+        // Don't auto-hide while downloading
+        return;
+      }
+
+      if (hideDelay > 0) {
         const timer = setTimeout(() => {
-          setVisibleDownloads((prev) =>
-            prev.filter((id) => id !== download.trackId),
-          );
-        }, 3000);
-        return () => clearTimeout(timer);
-      } else {
-        setVisibleDownloads((prev) => {
-          if (!prev.includes(download.trackId)) {
-            return [...prev, download.trackId];
-          }
-          return prev;
-        });
+          handleDismiss(trackId);
+        }, hideDelay);
+
+        timersRef.current.set(trackId, timer);
       }
     });
-  }, [downloadQueue]);
 
-  const handleDismiss = (id: string) => {
-    setVisibleDownloads((prev) => prev.filter((trackId) => trackId !== id));
+    // Cleanup timers on unmount
+    return () => {
+      timersRef.current.forEach((timer) => clearTimeout(timer));
+      timersRef.current.clear();
+    };
+  }, [downloadQueue, dismissedDownloads]);
+
+  const handleDismiss = (trackId: string) => {
+    // Add to dismissed set so it doesn't reappear
+    setDismissedDownloads((prev) => new Set(prev).add(trackId));
+
+    // Clear timer if exists
+    const timer = timersRef.current.get(trackId);
+    if (timer) {
+      clearTimeout(timer);
+      timersRef.current.delete(trackId);
+    }
   };
 
-  const displayedDownloads = downloadQueue.filter((d) =>
-    visibleDownloads.includes(d.trackId),
+  // Filter out dismissed downloads
+  const displayedDownloads = downloadQueue.filter(
+    (d) => !dismissedDownloads.has(d.trackId),
   );
+
+  // Cleanup dismissed downloads that are no longer in queue
+  useEffect(() => {
+    const currentTrackIds = new Set(downloadQueue.map((d) => d.trackId));
+    setDismissedDownloads((prev) => {
+      const updated = new Set(prev);
+      let hasChanges = false;
+
+      prev.forEach((trackId) => {
+        if (!currentTrackIds.has(trackId)) {
+          updated.delete(trackId);
+          hasChanges = true;
+        }
+      });
+
+      return hasChanges ? updated : prev;
+    });
+  }, [downloadQueue]);
 
   if (displayedDownloads.length === 0) {
     return null;
@@ -57,8 +110,9 @@ const DownloadProgressToast: React.FC = () => {
               exit={{ opacity: 0, x: 200, transition: { duration: 0.2 } }}
               drag="x"
               dragConstraints={{ left: 0, right: 0 }}
-              dragElastic={0.1} // Add this for smoother drag feel
+              dragElastic={0.1}
               onDragEnd={(_, info) => {
+                // Swipe to dismiss (100px threshold)
                 if (Math.abs(info.offset.x) > 100) {
                   handleDismiss(download.trackId);
                 }
@@ -106,15 +160,13 @@ const DownloadProgressToast: React.FC = () => {
                       </p>
                     </div>
 
-                    {/* Close button */}
-                    {(isFailed || isCompleted) && (
-                      <button
-                        onClick={() => handleDismiss(download.trackId)}
-                        className="flex-shrink-0 p-1 hover:bg-gray-800 rounded transition-colors"
-                      >
-                        <X size={14} className="text-gray-400" />
-                      </button>
-                    )}
+                    {/* Close button - show for all statuses */}
+                    <button
+                      onClick={() => handleDismiss(download.trackId)}
+                      className="flex-shrink-0 p-1 hover:bg-gray-800 rounded transition-colors"
+                    >
+                      <X size={14} className="text-gray-400" />
+                    </button>
                   </div>
 
                   {/* Progress Bar and Status */}
