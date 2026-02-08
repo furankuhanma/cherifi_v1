@@ -51,19 +51,19 @@ const DownloadProgressToast: React.FC = () => {
           return (
             <motion.div
               key={download.trackId}
-              layout // This makes other toasts slide up smoothly when one is removed
+              layout
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, x: 200, transition: { duration: 0.2 } }} // Swipe exit animation
-              drag="x" // Enable horizontal dragging
-              dragConstraints={{ left: 0, right: 0 }} // Snap back if not swiped far enough
+              exit={{ opacity: 0, x: 200, transition: { duration: 0.2 } }}
+              drag="x"
+              dragConstraints={{ left: 0, right: 0 }}
+              dragElastic={0.1} // Add this for smoother drag feel
               onDragEnd={(_, info) => {
-                // If swiped more than 100px left or right, remove it
                 if (Math.abs(info.offset.x) > 100) {
                   handleDismiss(download.trackId);
                 }
               }}
-              className={`pointer-events-auto cursor-grab active:cursor-grabbing bg-gray-900 border rounded-lg shadow-xl p-4 backdrop-blur-md transition-colors duration-300 touch-pan-y ${
+              className={`pointer-events-auto cursor-grab active:cursor-grabbing bg-gray-900 border rounded-lg shadow-xl p-4 backdrop-blur-md transition-colors duration-300 ${
                 isCompleted
                   ? "border-blue-400"
                   : isFailed

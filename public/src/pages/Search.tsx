@@ -257,15 +257,7 @@ const Search: React.FC = () => {
                         className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
                       />
                       <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-40 transition flex items-center justify-center">
-                        <div className="opacity-0 group-hover:opacity-100 transition">
-                          <svg
-                            className="w-6 h-6 text-white"
-                            fill="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path d="M8 5v14l11-7z" />
-                          </svg>
-                        </div>
+                        <div className="opacity-0 group-hover:opacity-100 transition"></div>
                       </div>
                     </div>
 
