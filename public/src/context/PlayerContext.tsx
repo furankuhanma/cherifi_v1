@@ -29,6 +29,9 @@ interface PlayerContextType {
   toggleShuffle: () => void;
   toggleRepeat: () => void;
   refreshSmartShuffle: (track: Track) => Promise<void>;
+  // 🆕 AI Queue Management
+  aiQueue: Track[];
+  isLoadingRecommendations: boolean;
 }
 
 interface Toast {
@@ -53,24 +56,89 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({
   const [volume, setVolumeState] = useState(0.8);
   const [playlist, setPlaylist] = useState<Track[]>([]);
   const [isPlayingOffline, setIsPlayingOffline] = useState(false);
+  const [isLoadingRecommendations, setIsLoadingRecommendations] =
+    useState(false);
 
   // ✅ Prefetch refs
   const prefetchedTrackRef = useRef<string | null>(null);
   const hasPrefetchedRef = useRef<boolean>(false);
 
-  // ✅ AI Recommendation System
+  // 🆕 Track if we're currently refilling the queue
+  const isRefillingQueueRef = useRef<boolean>(false);
+
+  const { isDownloaded, getOfflineAudioUrl } = useDownloads();
+
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const currentObjectUrlRef = useRef<string | null>(null);
+
+  const showToast = (message: string) => {
+    setToast({ message, visible: true });
+    setTimeout(() => {
+      setToast({ message: "", visible: false });
+    }, 2000);
+  };
+
+  // 🆕 Pre-cache all tracks in the AI queue
+  const precacheAIQueue = useCallback(
+    async (tracks: Track[]) => {
+      console.log(`🔥 Pre-caching ${tracks.length} AI recommendations...`);
+
+      const token = localStorage.getItem("auth_token");
+      const BASE_URL = import.meta.env.VITE_BACKEND_URL;
+
+      // Cache all tracks in parallel
+      const cachePromises = tracks.map(async (track) => {
+        if (!track.videoId || isDownloaded(track.id)) {
+          return;
+        }
+
+        try {
+          const response = await fetch(
+            `${BASE_URL}/api/stream/prefetch/${track.videoId}`,
+            {
+              method: "POST",
+              headers: {
+                Authorization: token ? `Bearer ${token}` : "",
+                "Content-Type": "application/json",
+              },
+            },
+          );
+
+          if (response.ok) {
+            console.log(`✅ Cached: ${track.title}`);
+          }
+        } catch (error) {
+          console.error(`❌ Failed to cache ${track.title}:`, error);
+        }
+      });
+
+      await Promise.all(cachePromises);
+      console.log(`🎉 Pre-caching complete for ${tracks.length} tracks`);
+    },
+    [isDownloaded],
+  );
+
+  // ✅ AI Recommendation System - Enhanced with auto-refill
   const refreshSmartShuffle = useCallback(
-    async (track: Track) => {
+    async (track: Track, shouldRefillQueue = false) => {
+      // Prevent multiple simultaneous refills
+      if (isRefillingQueueRef.current && shouldRefillQueue) {
+        console.log("⏳ Already refilling queue, skipping...");
+        return;
+      }
+
       try {
-        console.log(
-          "🎯 Fetching Spotify-style recommendations for:",
-          track.title,
-        );
+        if (shouldRefillQueue) {
+          isRefillingQueueRef.current = true;
+        }
+
+        setIsLoadingRecommendations(true);
+        console.log("🎯 Fetching AI recommendations for:", track.title);
 
         const recentTracks = playlist.slice(-5);
 
         const { analysis, recommendations } =
-          await aiAPI.getSmartRecommendations(track, recentTracks, 20);
+          await aiAPI.getSmartRecommendations(track, recentTracks, 15);
 
         if (recommendations.length === 0) {
           console.warn("⚠️ No AI recommendations, falling back to search");
@@ -78,14 +146,39 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({
           const filtered = fallbackResults
             .filter((t) => t.videoId !== track.videoId)
             .slice(0, 15);
-          setAiQueue(filtered);
+
+          if (shouldRefillQueue) {
+            // Append to existing queue instead of replacing
+            setAiQueue((prev) => [...prev, ...filtered]);
+            await precacheAIQueue(filtered);
+          } else {
+            setAiQueue(filtered);
+            await precacheAIQueue(filtered);
+          }
           return filtered;
         }
 
         console.log(`✅ Got ${recommendations.length} smart recommendations`);
         console.log(`📊 Genre: ${analysis.genre}, Mood: ${analysis.mood}`);
 
-        setAiQueue(recommendations);
+        if (shouldRefillQueue) {
+          // Append new recommendations to existing queue
+          setAiQueue((prev) => {
+            const newQueue = [...prev, ...recommendations];
+            console.log(
+              `📝 Queue refilled: ${prev.length} + ${recommendations.length} = ${newQueue.length} tracks`,
+            );
+            return newQueue;
+          });
+          // Pre-cache only the new recommendations
+          await precacheAIQueue(recommendations);
+        } else {
+          // Initial load - replace queue
+          setAiQueue(recommendations);
+          // Pre-cache all recommendations
+          await precacheAIQueue(recommendations);
+        }
+
         return recommendations;
       } catch (err) {
         console.error("❌ Smart Shuffle failed:", err);
@@ -98,29 +191,37 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({
           const filtered = fallbackResults
             .filter((t) => t.videoId !== track.videoId)
             .slice(0, 15);
-          setAiQueue(filtered);
+
+          if (shouldRefillQueue) {
+            setAiQueue((prev) => [...prev, ...filtered]);
+          } else {
+            setAiQueue(filtered);
+          }
           return filtered;
         } catch (fallbackErr) {
           console.error("❌ Fallback also failed:", fallbackErr);
           return [];
         }
+      } finally {
+        setIsLoadingRecommendations(false);
+        if (shouldRefillQueue) {
+          isRefillingQueueRef.current = false;
+        }
       }
     },
-    [playlist],
+    [playlist, isDownloaded, precacheAIQueue],
   );
 
-  const { isDownloaded, getOfflineAudioUrl } = useDownloads();
+  // 🆕 Check if queue needs refilling (when it drops to 5 or below)
+  const checkAndRefillQueue = useCallback(() => {
+    if (playbackMode !== "smart-shuffle") return;
+    if (!currentTrack) return;
+    if (aiQueue.length > 5) return;
+    if (isRefillingQueueRef.current) return;
 
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const currentObjectUrlRef = useRef<string | null>(null);
-
-  const showToast = (message: string) => {
-    setToast({ message, visible: true });
-
-    setTimeout(() => {
-      setToast({ message: "", visible: false });
-    }, 2000);
-  };
+    console.log(`⚠️ AI Queue low (${aiQueue.length} tracks) - refilling...`);
+    refreshSmartShuffle(currentTrack, true);
+  }, [playbackMode, currentTrack, aiQueue.length, refreshSmartShuffle]);
 
   const toggleShuffle = useCallback(() => {
     setPlaybackMode((prev) => {
@@ -129,7 +230,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({
         newMode === "smart-shuffle" ? "smart-shuffle on" : "shuffle off",
       );
       if (newMode === "smart-shuffle" && currentTrack) {
-        refreshSmartShuffle(currentTrack);
+        refreshSmartShuffle(currentTrack, false);
       }
       return newMode;
     });
@@ -394,7 +495,26 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, [isPlaying, currentTrack]);
 
+  // 🆕 Enhanced nextTrack with queue management
   const nextTrack = useCallback(() => {
+    if (playbackMode === "smart-shuffle" && aiQueue.length > 0) {
+      const nextAiTrack = aiQueue[0];
+
+      // Remove the track we're about to play from the queue
+      setAiQueue((prev) => prev.slice(1));
+
+      console.log(`⏭️ Next AI track (${aiQueue.length - 1} left in queue)`);
+      playTrack(nextAiTrack);
+
+      // Check if we need to refill the queue after this state update
+      // We schedule it for next tick to ensure state is updated
+      setTimeout(() => {
+        checkAndRefillQueue();
+      }, 100);
+
+      return;
+    }
+
     if (!currentTrack || playlist.length === 0) return;
 
     const currentIndex = playlist.findIndex((t) => t.id === currentTrack.id);
@@ -402,7 +522,14 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({
 
     console.log("⏭️ Next track");
     playTrack(playlist[nextIndex]);
-  }, [currentTrack, playlist, playTrack]);
+  }, [
+    currentTrack,
+    playlist,
+    playTrack,
+    playbackMode,
+    aiQueue,
+    checkAndRefillQueue,
+  ]);
 
   const prevTrack = useCallback(() => {
     if (!currentTrack || playlist.length === 0) return;
@@ -440,6 +567,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, [volume]);
 
+  // 🆕 Enhanced track end handler
   const handleTrackEnd = useCallback(() => {
     if (playbackMode === "repeat-one") {
       if (audioRef.current) {
@@ -450,12 +578,16 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({
       const nextAiTrack = aiQueue[0];
       setAiQueue((prev) => prev.slice(1));
       playTrack(nextAiTrack);
+
+      // Check if queue needs refilling after playing next track
+      setTimeout(() => {
+        checkAndRefillQueue();
+      }, 100);
     } else {
       nextTrack();
     }
-  }, [playbackMode, aiQueue, playTrack, nextTrack]);
+  }, [playbackMode, aiQueue, playTrack, nextTrack, checkAndRefillQueue]);
 
-  // ✅ Initialize audio with handleTimeUpdate dependency
   // Initialize audio element ONCE
   useEffect(() => {
     const audio = new Audio();
@@ -476,7 +608,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({
         currentObjectUrlRef.current = null;
       }
     };
-  }, []); // ✅ Empty - only runs once
+  }, []);
 
   // Separate effect for handleTimeUpdate
   useEffect(() => {
@@ -487,7 +619,7 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({
     return () => audio.removeEventListener("timeupdate", handleTimeUpdate);
   }, [handleTimeUpdate]);
 
-  // Separate effect for handleTrackEnd (you already have this)
+  // Separate effect for handleTrackEnd
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
@@ -518,6 +650,8 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({
         refreshSmartShuffle,
         isGlobalMenuOpen,
         setIsGlobalMenuOpen,
+        aiQueue,
+        isLoadingRecommendations,
       }}
     >
       {children}
