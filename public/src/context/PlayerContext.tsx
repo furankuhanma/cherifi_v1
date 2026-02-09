@@ -66,6 +66,13 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({
   // 🆕 Track if we're currently refilling the queue
   const isRefillingQueueRef = useRef<boolean>(false);
 
+  // 🆕 Track if tab is in background
+  const isTabVisibleRef = useRef<boolean>(true);
+
+  // 🆕 Download worker for background downloads
+  const downloadQueueRef = useRef<Track[]>([]);
+  const isDownloadingRef = useRef<boolean>(false);
+
   const { isDownloaded, getOfflineAudioUrl } = useDownloads();
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -78,113 +85,123 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({
     }, 2000);
   };
 
-  // 🆕 Pre-cache all tracks in the AI queue to FRONTEND IndexedDB
-  const precacheAIQueue = useCallback(
-    async (tracks: Track[]) => {
-      console.log(
-        `🔥 Pre-downloading ${tracks.length} AI recommendations to frontend...`,
-      );
+  // 🆕 Optimized background download with throttling
+  const downloadNextInQueue = useCallback(async () => {
+    if (isDownloadingRef.current || downloadQueueRef.current.length === 0) {
+      return;
+    }
+
+    // Don't download if tab is in background
+    if (!isTabVisibleRef.current) {
+      console.log("⏸️ Tab in background - pausing downloads");
+      return;
+    }
+
+    isDownloadingRef.current = true;
+    const track = downloadQueueRef.current.shift()!;
+
+    if (!track.videoId || isDownloaded(track.id)) {
+      isDownloadingRef.current = false;
+      downloadNextInQueue(); // Process next
+      return;
+    }
+
+    try {
+      console.log(`⬇️ Downloading to frontend: ${track.title}`);
 
       const token = localStorage.getItem("auth_token");
       const BASE_URL = import.meta.env.VITE_BACKEND_URL;
 
-      // Download all tracks in parallel (limit to 5 at a time to avoid overwhelming the browser)
-      const batchSize = 5;
-      for (let i = 0; i < tracks.length; i += batchSize) {
-        const batch = tracks.slice(i, i + batchSize);
+      // Get the stream URL
+      const streamResponse = await fetch(
+        `${BASE_URL}/api/stream/${track.videoId}`,
+        {
+          headers: {
+            Authorization: token ? `Bearer ${token}` : "",
+          },
+        },
+      );
 
-        const cachePromises = batch.map(async (track) => {
-          if (!track.videoId) {
-            console.log(`⏭️ Skipping ${track.title} - no videoId`);
-            return;
-          }
-
-          if (isDownloaded(track.id)) {
-            console.log(`✅ Already cached: ${track.title}`);
-            return;
-          }
-
-          try {
-            console.log(`⬇️ Downloading to frontend: ${track.title}`);
-
-            // Get the stream URL
-            const streamResponse = await fetch(
-              `${BASE_URL}/api/stream/${track.videoId}`,
-              {
-                headers: {
-                  Authorization: token ? `Bearer ${token}` : "",
-                },
-              },
-            );
-
-            if (!streamResponse.ok) {
-              throw new Error(
-                `Failed to get stream URL: ${streamResponse.status}`,
-              );
-            }
-
-            const { url: streamUrl } = await streamResponse.json();
-
-            // Download the audio file
-            const audioResponse = await fetch(streamUrl);
-            if (!audioResponse.ok) {
-              throw new Error(
-                `Failed to download audio: ${audioResponse.status}`,
-              );
-            }
-
-            const audioBlob = await audioResponse.blob();
-
-            // Save to IndexedDB using the DownloadContext
-            const audioFile = new File([audioBlob], `${track.title}.mp3`, {
-              type: "audio/mpeg",
-            });
-
-            // Open IndexedDB and save
-            const db = await new Promise<IDBDatabase>((resolve, reject) => {
-              const request = indexedDB.open("MusicPlayerDB", 1);
-              request.onerror = () => reject(request.error);
-              request.onsuccess = () => resolve(request.result);
-              request.onupgradeneeded = (event) => {
-                const db = (event.target as IDBOpenDBRequest).result;
-                if (!db.objectStoreNames.contains("downloads")) {
-                  db.createObjectStore("downloads", { keyPath: "videoId" });
-                }
-              };
-            });
-
-            const transaction = db.transaction(["downloads"], "readwrite");
-            const store = transaction.objectStore("downloads");
-
-            await new Promise<void>((resolve, reject) => {
-              const request = store.put({
-                videoId: track.videoId,
-                track: track,
-                audioBlob: audioFile,
-                downloadedAt: new Date().toISOString(),
-              });
-              request.onsuccess = () => resolve();
-              request.onerror = () => reject(request.error);
-            });
-
-            db.close();
-            console.log(`✅ Downloaded to frontend: ${track.title}`);
-          } catch (error) {
-            console.error(`❌ Failed to download ${track.title}:`, error);
-          }
-        });
-
-        await Promise.all(cachePromises);
-        console.log(
-          `✅ Batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(tracks.length / batchSize)} complete`,
-        );
+      if (!streamResponse.ok) {
+        throw new Error(`Failed to get stream URL: ${streamResponse.status}`);
       }
 
+      const { url: streamUrl } = await streamResponse.json();
+
+      // Download the audio file
+      const audioResponse = await fetch(streamUrl);
+      if (!audioResponse.ok) {
+        throw new Error(`Failed to download audio: ${audioResponse.status}`);
+      }
+
+      const audioBlob = await audioResponse.blob();
+
+      // Save to IndexedDB
+      const audioFile = new File([audioBlob], `${track.title}.mp3`, {
+        type: "audio/mpeg",
+      });
+
+      const db = await new Promise<IDBDatabase>((resolve, reject) => {
+        const request = indexedDB.open("MusicPlayerDB", 1);
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => resolve(request.result);
+        request.onupgradeneeded = (event) => {
+          const db = (event.target as IDBOpenDBRequest).result;
+          if (!db.objectStoreNames.contains("downloads")) {
+            db.createObjectStore("downloads", { keyPath: "videoId" });
+          }
+        };
+      });
+
+      const transaction = db.transaction(["downloads"], "readwrite");
+      const store = transaction.objectStore("downloads");
+
+      await new Promise<void>((resolve, reject) => {
+        const request = store.put({
+          videoId: track.videoId,
+          track: track,
+          audioBlob: audioFile,
+          downloadedAt: new Date().toISOString(),
+        });
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+      });
+
+      db.close();
       console.log(
-        `🎉 Frontend pre-caching complete for ${tracks.length} tracks`,
+        `✅ Downloaded to frontend: ${track.title} (${downloadQueueRef.current.length} remaining)`,
       );
+    } catch (error) {
+      console.error(`❌ Failed to download ${track.title}:`, error);
+    } finally {
+      isDownloadingRef.current = false;
+
+      // Wait a bit before next download to avoid overwhelming the device
+      setTimeout(() => {
+        downloadNextInQueue();
+      }, 500); // 500ms delay between downloads
+    }
+  }, [isDownloaded]);
+
+  // 🆕 Optimized pre-cache with background queue
+  const precacheAIQueue = useCallback(
+    async (tracks: Track[]) => {
+      console.log(
+        `🔥 Queuing ${tracks.length} AI recommendations for download...`,
+      );
+
+      // Add tracks to download queue
+      const newTracks = tracks.filter((t) => t.videoId && !isDownloaded(t.id));
+      downloadQueueRef.current.push(...newTracks);
+
+      console.log(
+        `📝 Download queue: ${downloadQueueRef.current.length} tracks`,
+      );
+
+      // Start downloading if not already in progress
+      downloadNextInQueue();
     },
-    [isDownloaded],
+    [isDownloaded, downloadNextInQueue],
   );
 
   // ✅ AI Recommendation System - Enhanced with auto-refill
@@ -217,7 +234,6 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({
             .slice(0, 15);
 
           if (shouldRefillQueue) {
-            // Append to existing queue instead of replacing
             setAiQueue((prev) => [...prev, ...filtered]);
             await precacheAIQueue(filtered);
           } else {
@@ -231,7 +247,6 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({
         console.log(`📊 Genre: ${analysis.genre}, Mood: ${analysis.mood}`);
 
         if (shouldRefillQueue) {
-          // Append new recommendations to existing queue
           setAiQueue((prev) => {
             const newQueue = [...prev, ...recommendations];
             console.log(
@@ -239,12 +254,9 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({
             );
             return newQueue;
           });
-          // Pre-cache only the new recommendations
           await precacheAIQueue(recommendations);
         } else {
-          // Initial load - replace queue
           setAiQueue(recommendations);
-          // Pre-cache all recommendations
           await precacheAIQueue(recommendations);
         }
 
@@ -590,7 +602,6 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({
         playTrack(nextAiTrack);
 
         // Check if we need to refill the queue after this state update
-        // We schedule it for next tick to ensure state is updated
         setTimeout(() => {
           checkAndRefillQueue();
         }, 100);
@@ -598,7 +609,6 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({
         return;
       } else {
         console.warn("⚠️ Smart shuffle enabled but AI queue is empty!");
-        // Fallback to regular playlist if AI queue is empty
       }
     }
 
@@ -671,7 +681,6 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({
       setAiQueue((prev) => prev.slice(1));
       playTrack(nextAiTrack);
 
-      // Check if queue needs refilling after playing next track
       setTimeout(() => {
         checkAndRefillQueue();
       }, 100);
@@ -680,10 +689,40 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, [playbackMode, aiQueue, playTrack, nextTrack, checkAndRefillQueue]);
 
-  // Initialize audio element ONCE
+  // 🆕 Monitor tab visibility and pause downloads when in background
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      isTabVisibleRef.current = !document.hidden;
+
+      if (!document.hidden) {
+        console.log("👁️ Tab visible - resuming downloads");
+        downloadNextInQueue();
+      } else {
+        console.log("🙈 Tab hidden - pausing downloads");
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [downloadNextInQueue]);
+
+  // Initialize audio element ONCE with mobile-optimized settings
   useEffect(() => {
     const audio = new Audio();
     audio.volume = volume;
+
+    // 🆕 Mobile-specific optimizations
+    audio.preload = "auto"; // Aggressive buffering
+    audio.crossOrigin = "anonymous";
+
+    // Request audio focus for uninterrupted playback
+    if ("audioSession" in navigator) {
+      (navigator as any).audioSession.type = "playback";
+    }
+
     audioRef.current = audio;
 
     audio.addEventListener("error", handleAudioError);
