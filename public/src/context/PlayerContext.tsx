@@ -78,42 +78,111 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({
     }, 2000);
   };
 
-  // 🆕 Pre-cache all tracks in the AI queue
+  // 🆕 Pre-cache all tracks in the AI queue to FRONTEND IndexedDB
   const precacheAIQueue = useCallback(
     async (tracks: Track[]) => {
-      console.log(`🔥 Pre-caching ${tracks.length} AI recommendations...`);
+      console.log(
+        `🔥 Pre-downloading ${tracks.length} AI recommendations to frontend...`,
+      );
 
       const token = localStorage.getItem("auth_token");
       const BASE_URL = import.meta.env.VITE_BACKEND_URL;
 
-      // Cache all tracks in parallel
-      const cachePromises = tracks.map(async (track) => {
-        if (!track.videoId || isDownloaded(track.id)) {
-          return;
-        }
+      // Download all tracks in parallel (limit to 5 at a time to avoid overwhelming the browser)
+      const batchSize = 5;
+      for (let i = 0; i < tracks.length; i += batchSize) {
+        const batch = tracks.slice(i, i + batchSize);
 
-        try {
-          const response = await fetch(
-            `${BASE_URL}/api/stream/prefetch/${track.videoId}`,
-            {
-              method: "POST",
-              headers: {
-                Authorization: token ? `Bearer ${token}` : "",
-                "Content-Type": "application/json",
-              },
-            },
-          );
-
-          if (response.ok) {
-            console.log(`✅ Cached: ${track.title}`);
+        const cachePromises = batch.map(async (track) => {
+          if (!track.videoId) {
+            console.log(`⏭️ Skipping ${track.title} - no videoId`);
+            return;
           }
-        } catch (error) {
-          console.error(`❌ Failed to cache ${track.title}:`, error);
-        }
-      });
 
-      await Promise.all(cachePromises);
-      console.log(`🎉 Pre-caching complete for ${tracks.length} tracks`);
+          if (isDownloaded(track.id)) {
+            console.log(`✅ Already cached: ${track.title}`);
+            return;
+          }
+
+          try {
+            console.log(`⬇️ Downloading to frontend: ${track.title}`);
+
+            // Get the stream URL
+            const streamResponse = await fetch(
+              `${BASE_URL}/api/stream/${track.videoId}`,
+              {
+                headers: {
+                  Authorization: token ? `Bearer ${token}` : "",
+                },
+              },
+            );
+
+            if (!streamResponse.ok) {
+              throw new Error(
+                `Failed to get stream URL: ${streamResponse.status}`,
+              );
+            }
+
+            const { url: streamUrl } = await streamResponse.json();
+
+            // Download the audio file
+            const audioResponse = await fetch(streamUrl);
+            if (!audioResponse.ok) {
+              throw new Error(
+                `Failed to download audio: ${audioResponse.status}`,
+              );
+            }
+
+            const audioBlob = await audioResponse.blob();
+
+            // Save to IndexedDB using the DownloadContext
+            const audioFile = new File([audioBlob], `${track.title}.mp3`, {
+              type: "audio/mpeg",
+            });
+
+            // Open IndexedDB and save
+            const db = await new Promise<IDBDatabase>((resolve, reject) => {
+              const request = indexedDB.open("MusicPlayerDB", 1);
+              request.onerror = () => reject(request.error);
+              request.onsuccess = () => resolve(request.result);
+              request.onupgradeneeded = (event) => {
+                const db = (event.target as IDBOpenDBRequest).result;
+                if (!db.objectStoreNames.contains("downloads")) {
+                  db.createObjectStore("downloads", { keyPath: "videoId" });
+                }
+              };
+            });
+
+            const transaction = db.transaction(["downloads"], "readwrite");
+            const store = transaction.objectStore("downloads");
+
+            await new Promise<void>((resolve, reject) => {
+              const request = store.put({
+                videoId: track.videoId,
+                track: track,
+                audioBlob: audioFile,
+                downloadedAt: new Date().toISOString(),
+              });
+              request.onsuccess = () => resolve();
+              request.onerror = () => reject(request.error);
+            });
+
+            db.close();
+            console.log(`✅ Downloaded to frontend: ${track.title}`);
+          } catch (error) {
+            console.error(`❌ Failed to download ${track.title}:`, error);
+          }
+        });
+
+        await Promise.all(cachePromises);
+        console.log(
+          `✅ Batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(tracks.length / batchSize)} complete`,
+        );
+      }
+
+      console.log(
+        `🎉 Frontend pre-caching complete for ${tracks.length} tracks`,
+      );
     },
     [isDownloaded],
   );
@@ -497,30 +566,53 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({
 
   // 🆕 Enhanced nextTrack with queue management
   const nextTrack = useCallback(() => {
-    if (playbackMode === "smart-shuffle" && aiQueue.length > 0) {
-      const nextAiTrack = aiQueue[0];
+    console.log(
+      `🔍 nextTrack called - Mode: ${playbackMode}, AI Queue: ${aiQueue.length}, Playlist: ${playlist.length}`,
+    );
 
-      // Remove the track we're about to play from the queue
-      setAiQueue((prev) => prev.slice(1));
+    if (playbackMode === "smart-shuffle") {
+      if (aiQueue.length > 0) {
+        const nextAiTrack = aiQueue[0];
 
-      console.log(`⏭️ Next AI track (${aiQueue.length - 1} left in queue)`);
-      playTrack(nextAiTrack);
+        console.log(
+          `⏭️ Playing AI track: ${nextAiTrack.title} (${aiQueue.length - 1} tracks remaining)`,
+        );
 
-      // Check if we need to refill the queue after this state update
-      // We schedule it for next tick to ensure state is updated
-      setTimeout(() => {
-        checkAndRefillQueue();
-      }, 100);
+        // Remove the track we're about to play from the queue
+        setAiQueue((prev) => {
+          const newQueue = prev.slice(1);
+          console.log(
+            `📝 AI Queue updated: ${prev.length} → ${newQueue.length}`,
+          );
+          return newQueue;
+        });
 
-      return;
+        playTrack(nextAiTrack);
+
+        // Check if we need to refill the queue after this state update
+        // We schedule it for next tick to ensure state is updated
+        setTimeout(() => {
+          checkAndRefillQueue();
+        }, 100);
+
+        return;
+      } else {
+        console.warn("⚠️ Smart shuffle enabled but AI queue is empty!");
+        // Fallback to regular playlist if AI queue is empty
+      }
     }
 
-    if (!currentTrack || playlist.length === 0) return;
+    if (!currentTrack || playlist.length === 0) {
+      console.warn("⚠️ Cannot play next - no current track or empty playlist");
+      return;
+    }
 
     const currentIndex = playlist.findIndex((t) => t.id === currentTrack.id);
     const nextIndex = (currentIndex + 1) % playlist.length;
 
-    console.log("⏭️ Next track");
+    console.log(
+      `⏭️ Next track from playlist (${nextIndex + 1}/${playlist.length})`,
+    );
     playTrack(playlist[nextIndex]);
   }, [
     currentTrack,
